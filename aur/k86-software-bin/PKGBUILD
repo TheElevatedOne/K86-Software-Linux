@@ -3,7 +3,7 @@
 pkgname=k86-software-bin
 _pkgname=k86-software
 _tarname=attackshark-k86
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Configuration software for the Attack Shark K86 keyboard (CLI and GTK 3 GUI, prebuilt)'
 arch=('x86_64' 'aarch64')
@@ -17,8 +17,8 @@ options=('!debug' '!strip')
 # Release tags have no "v" prefix.
 source_x86_64=("$url/releases/download/$pkgver/$_tarname-$pkgver-linux-x86_64.tar.gz")
 source_aarch64=("$url/releases/download/$pkgver/$_tarname-$pkgver-linux-aarch64.tar.gz")
-sha256sums_x86_64=('19c384b852898f1d3e051f3d959fa416e06a074446270b26847a9ef0e9def501')
-sha256sums_aarch64=('809c87beb0e73554a8501fd1acdf824da4f52ad051604ce1da42936aebb8e496')
+sha256sums_x86_64=('6bece6a2f26d25eac98c317459819fd8facb9d44380904ce39d557a93f9b13db')
+sha256sums_aarch64=('18f98ff7f0c9da6d60f67ecb823f278208ec584c00b6cc60f7697ab0a55a8f22')
 
 package() {
   cd "$_tarname-$pkgver-linux-$CARCH"
