@@ -90,5 +90,10 @@ To regenerate the golden files, extract the installer (`7z x "ATTACK SHARK K86 S
 then `7z x '$PLUGINSDIR/app-32.7z'`) and run
 `node tests/js/run.mjs <extracted>/resources/app/dist/js tests/golden`.
 
-The code has not been run against a physical keyboard yet; the Linux transport follows the
-original's WebHID path (64-byte feature reports, report ID 0).
+### Hardware
+
+Tested on a K86 YC3121 (`3151:4015`, firmware id 1168, USB version 0x0114) over USB: device
+queries, lighting, per-key colours and animation, key and Fn remapping (checked through the
+input reports), macros, profile, debounce, sleep timers, options, LCD images and GIFs, clock
+sync, and the GUI start-up. Factory reset and screen erase were not tried, and the
+YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md for the firmware timing this needed.

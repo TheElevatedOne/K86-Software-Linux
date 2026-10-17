@@ -185,7 +185,8 @@ int slotArg(const KeyMatrix& defaults, const std::string& key) {
 
 void printLight(const LightSetting& l, const std::vector<LightModeInfo>& modes) {
     const LightModeInfo* m = findLightMode(modes, l.mode);
-    std::cout << "mode: " << (m ? m->name : "unknown") << " (" << int(l.mode) << ")\n"
+    std::string name = m ? m->name : l.mode == kModeUserAnimation ? "per-key animation" : "unknown";
+    std::cout << "mode: " << name << " (" << int(l.mode) << ")\n"
               << "brightness: " << int(l.brightness) << "\n"
               << "speed: " << int(l.speed) << "\n"
               << "option: " << int(l.option) << "\n"
@@ -503,6 +504,8 @@ int run(const Args& a) {
         std::string sub = arg(1);
         uint8_t layer = uint8_t(toInt(a.get("layer", "0"), 0, 255, "--layer"));
         const KeyMatrix& names = kb->defaultMatrix();
+        if ((sub == "set" || sub == "fill") && kb->leaveUserAnimation())
+            std::cerr << "note: stopped the per-key animation and switched to the custom effect\n";
         if (sub == "show") {
             auto c = kb->getUserPicture(layer);
             for (int i = 0; i < kSlots; ++i) {

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <ctime>
 #include <stdexcept>
@@ -83,6 +84,7 @@ std::vector<DeviceModel> buildModels() {
     a.deepSleepMin = 600;
     a.deepSleepMax = 3600;
     a.vendorSleepMs = 500;
+    a.waitForCommit = true;
     v.push_back(a);
 
     DeviceModel b = a;
@@ -103,6 +105,7 @@ std::vector<DeviceModel> buildModels() {
     b.deepSleepMin = 10;
     b.deepSleepMax = 18 * 3600;
     b.vendorSleepMs = 100;
+    b.waitForCommit = false;  // not verified on hardware
     v.push_back(b);
     return v;
 }
@@ -564,6 +567,29 @@ Keyboard::Keyboard(Transport& t, const DeviceModel& model, Session::SleepFn slee
     std::copy_n(model.defaultFnMatrix, fnDefaults_.size(), fnDefaults_.begin());
 }
 
+void Keyboard::vendorSleep(int ms) {
+    s_.sleep(ms < 0 ? model_.vendorSleepMs : ms);
+    if (waitForCommit_ && model_.waitForCommit) waitUntilIdle();
+}
+
+// While the firmware commits a write, every feature report transfer is stalled by ~100 ms;
+// afterwards a device id query completes in a few ms. Wait for two fast queries in a row.
+void Keyboard::waitUntilIdle() {
+    using Clock = std::chrono::steady_clock;
+    const auto deadline = Clock::now() + std::chrono::seconds(4);
+    int fast = 0;
+    while (fast < 2 && Clock::now() < deadline) {
+        auto start = Clock::now();
+        try {
+            s_.query({0x8F}, Checksum::Bit7);
+        } catch (const std::runtime_error&) {  // a stalled transfer can time out
+            fast = 0;
+            continue;
+        }
+        fast = Clock::now() - start < std::chrono::milliseconds(60) ? fast + 1 : 0;
+    }
+}
+
 std::optional<uint32_t> Keyboard::readDeviceId() {
     for (int i = 0; i < 3; ++i) {
         Report r = s_.query({0x8F}, Checksum::Bit7);
@@ -615,8 +641,18 @@ std::optional<LightSetting> Keyboard::getLight() {
     auto t = zeros(64);
     t[0] = 0x87;
     Report e = s_.query(t, Checksum::Bit7);
-    if (e[1] > 24) return std::nullopt;
+    if (e[1] > 24 && e[1] != kModeUserAnimation) return std::nullopt;
     return decodeLight(e, std::max(0, int(maxSpeed()) - int(e[2])), e[1] == kModeMusic3 || e[1] == kModeMusic2, kDazzle, kNormal);
+}
+
+bool Keyboard::leaveUserAnimation() {
+    auto l = getLight();
+    if (!l || l->mode != kModeUserAnimation) return false;
+    LightSetting custom;
+    custom.mode = kModeUserPicture;
+    custom.brightness = uint8_t(model_.maxBrightness);
+    setLight(custom);
+    return true;
 }
 
 void Keyboard::setSideLight(const LightSetting&) {
@@ -649,6 +685,8 @@ void Keyboard::setMacro(uint8_t index, const Macro& m) {
         size_t b = size_t(c) * 56, e = std::min(data.size(), b + 56);
         if (std::any_of(data.begin() + b, data.begin() + e, [](uint8_t v) { return v != 0; })) ++count;
     }
+    // An empty macro still needs its first chunk, otherwise clearing a slot sends nothing.
+    count = std::max(count, 1);
     sendPaged(data, count, [&](int p, size_t) {
         return std::vector<uint8_t>{cmdSetMacro(), index, uint8_t(p), 56, uint8_t(p == count - 1), 0, 0, 0};
     });

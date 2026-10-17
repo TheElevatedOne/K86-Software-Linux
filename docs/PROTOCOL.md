@@ -42,6 +42,30 @@ The message is zero padded to at least 8 bytes, then a checksum is applied:
 Bulk writes use an 8-byte header (byte 7 = checksum) followed by up to 56 data bytes.
 After most writes the original pauses ("vendor sleep"): 500 ms (YC3121), 100 ms (YC3123).
 
+### Write commit (observed on a YC3121, firmware id 1168, USB version 0x0114)
+
+The vendor sleep is not enough. After a write the firmware keeps committing it to flash; while
+it does, every SET/GET_FEATURE takes ~100 ms instead of ~1 ms. Measured end of that window,
+counted from the first packet of the write:
+
+| Write | Busy until |
+|---|---|
+| single key `13` | ~0.5 s |
+| backlight `07` | ~1.1 s |
+| per-key colours `0C` ×7 | ~1.7 s |
+| key / Fn matrix `09` / `10` ×9 | ~2.1 s |
+
+* Reads inside the window return **stale pages** (old data, no error), so a read-modify-write
+  right after a write silently writes old data back.
+* Reading **~10 ms after a write rebooted the keyboard** (USB disconnect, re-enumeration; the
+  unsaved write and the current effect were lost). Polling from 500 ms on was safe.
+* Responses to the paged reads (`89`, `8C`, …) carry no header, so stale data cannot be
+  recognised by content.
+
+This port waits for the window to close after every YC3121 write: after the vendor sleep it
+repeats the device id query `8F` until two in a row complete in under 60 ms (at most 4 s).
+Not verified on the YC3123, where it is off.
+
 ## Commands
 
 `P` = profile/layer, `S` = key slot (0–127), `pg` = page.
@@ -92,6 +116,10 @@ Modes: 0 off, 1 static, 2 breath, 3 neon, 4 wave, 5 ripple, 6 raindrop, 7 snake,
 20 music 3, 21 screen colour, 22 music 2, 23 train, 24 fireworks.
 The K86 UI offers all of them except 20, 23, 24 (and "off" is not in its list).
 
+After a per-key animation upload (`18`/`19`) the YC3121 reports mode **66 (`0x42`)**, which the
+driver does not list. Per-key colour writes (`0C`) made in that mode read back fine but are
+discarded when the effect changes, so this port switches to "custom" (13) before writing them.
+
 Side light (`08`, YC3123): modes 0 off, 1 static, 2 breath, 3 neon (type byte 8), 4 wave,
 5 snake, 6 music; speed is not inverted (0–3).
 
@@ -111,6 +139,12 @@ Side light (`08`, YC3123): modes 0 off, 1 static, 2 breath, 3 neon (type byte 8)
 Other values (`0A xx`, `0D xx`, `0E xx`, `13 xx` …) are firmware functions that the driver only
 uses in the default Fn layers; their meaning is not named in the driver.
 
+### Factory Fn layer
+
+The YC3121 tested here ships with a different Fn layer than the driver's default table: Fn+F1–F8
+are `00 00 00 00` and Fn+F9–F12 are consumer PrevTrack / PlayPause / NextTrack / MediaPlayer
+(`0x183`). `keymap reset --fn` writes the driver's table, not this one.
+
 ### Macro slot (256 bytes)
 
 `repeat (u16 LE)` followed by events:
@@ -119,7 +153,8 @@ uses in the default Fn layers; their meaning is not named in the driver.
 * key / mouse button, longer delay: `code, 0x80 if down else 0, delay u16 LE`
 * mouse move: `F9, delay (≤127) or 0, dx, dy [, delay u16 LE if long]`
 
-The list ends at four zero bytes. Notes on the original: it encodes a 0 ms delay in the
+The list ends at four zero bytes. The original only sends the chunks that contain non-zero
+bytes; for an empty macro that would be no packet at all, so this port always sends the first one. Notes on the original: it encodes a 0 ms delay in the
 short form (which its own decoder then misreads), and decodes a short mouse-move delay as
 `byte >> 1` although it stores it unshifted. This port writes 0 ms delays in the long form
 and reads the move delay unshifted.

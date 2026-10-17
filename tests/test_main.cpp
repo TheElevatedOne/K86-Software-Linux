@@ -1,6 +1,7 @@
 // Unit tests. The golden files in tests/golden/ were produced by running the original
 // driver's JavaScript device classes against a recording transport (tests/js/), so these
 // tests check that the C++ port emits byte-identical feature reports.
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -124,6 +125,33 @@ void testMacro() {
         CHECK(back.events[i].delayMs == m.events[i].delayMs);
         CHECK(back.events[i].dx == m.events[i].dx && back.events[i].dy == m.events[i].dy);
     }
+}
+
+void testMacroClear() {
+    for (int mi = 0; mi < 2; ++mi) {
+        RecordingTransport t;
+        auto kb = makeKeyboard(t, knownModels()[mi], [](int) {});
+        kb->setMacro(2, Macro{0, {}});
+        CHECK(t.sent.size() == 1);  // one all-zero chunk marked as the last one
+        CHECK(t.sent[0][1] == 2 && t.sent[0][2] == 0 && t.sent[0][4] == 1);
+        CHECK(std::all_of(t.sent[0].begin() + 8, t.sent[0].end(), [](uint8_t v) { return v == 0; }));
+    }
+}
+
+// With waitForCommit on, a YC3121 write is followed by device id queries until two answer fast.
+void testWaitForCommit() {
+    RecordingTransport t;
+    auto kb = makeKeyboard(t, knownModels()[0], [](int) {});
+    kb->setWaitForCommit(true);
+    kb->setDebounce(5);
+    CHECK(t.sent.size() == 3);
+    CHECK(t.sent.size() == 3 && t.sent[1][0] == 0x8F && t.sent[2][0] == 0x8F);
+
+    RecordingTransport t2;  // not enabled for the YC3123
+    auto kb2 = makeKeyboard(t2, knownModels()[1], [](int) {});
+    kb2->setWaitForCommit(true);
+    kb2->setDebounce(5);
+    CHECK(t2.sent.size() == 1);
 }
 
 void testScreen() {
@@ -265,6 +293,8 @@ int main(int argc, char** argv) {
     testActions();
     testSlots();
     testMacro();
+    testMacroClear();
+    testWaitForCommit();
     testScreen();
     std::string golden = argc > 1 ? argv[1] : K86_GOLDEN_DIR;
     testGolden(golden);

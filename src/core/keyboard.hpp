@@ -26,6 +26,10 @@ using Rgb = uint32_t;  // 0xRRGGBB
 
 enum class Chip { YC3121, YC3123 };
 
+// Effect the firmware switches to after a per-key animation upload (not in the driver's mode
+// list and not selectable with setLight; observed on the YC3121).
+constexpr uint8_t kModeUserAnimation = 0x42;
+
 struct LightModeInfo {
     std::string name;  // CLI name, e.g. "wave"
     std::string original;  // name in the original software, e.g. "LightWave"
@@ -51,6 +55,9 @@ struct DeviceModel {
     bool canSyncSystemInfo, canSwitchLanguage;
     int sleepMin, sleepMax, deepSleepMin, deepSleepMax;  // seconds
     int vendorSleepMs;  // pause the original software inserts after write commands
+    // The firmware keeps committing a write to flash for up to ~2 s after the vendor sleep; reads in
+    // that window return stale pages and reads right after a write can reboot it (YC3121).
+    bool waitForCommit;
 };
 
 const std::vector<DeviceModel>& knownModels();
@@ -130,6 +137,9 @@ public:
     // Per-key colours for the "custom" light mode, indexed by key slot.
     virtual std::array<Rgb, kSlots> getUserPicture(uint8_t layer) = 0;
     virtual void setUserPicture(uint8_t layer, const std::array<Rgb, kSlots>& colors) = 0;
+    // Per-key colours written while the animation effect plays are dropped when the effect
+    // changes (YC3121), so front ends call this first: it switches to "custom" if needed.
+    bool leaveUserAnimation();
     // Per-key animation upload.
     virtual void startUserAnimation() = 0;
     virtual void sendUserAnimationFrame(uint8_t frame, uint8_t frameCount, uint16_t delay,
@@ -146,11 +156,17 @@ public:
 
     virtual void factoryReset() = 0;
 
+    // Poll after each write until the firmware has finished committing it (only on models with
+    // DeviceModel::waitForCommit). Off by default so that recorded/dry-run report streams stay
+    // identical to the original driver; openKeyboard() turns it on for real hardware.
+    void setWaitForCommit(bool on) { waitForCommit_ = on; }
+
     const KeyMatrix& defaultMatrix() const { return defaults_; }
     const KeyMatrix& defaultFnMatrix() const { return fnDefaults_; }
 
 protected:
-    void vendorSleep(int ms = -1) { s_.sleep(ms < 0 ? model_.vendorSleepMs : ms); }
+    void vendorSleep(int ms = -1);
+    void waitUntilIdle();
     // Send `data` in 56-byte chunks, each prefixed by an 8-byte header built by `header(page, len)`.
     void sendPaged(const std::vector<uint8_t>& data, int pages,
                    const std::function<std::vector<uint8_t>(int page, size_t len)>& header,
@@ -165,6 +181,7 @@ protected:
     Session s_;
     const DeviceModel& model_;
     KeyMatrix defaults_{}, fnDefaults_{};
+    bool waitForCommit_ = false;
 };
 
 // Opens the right implementation for the model.

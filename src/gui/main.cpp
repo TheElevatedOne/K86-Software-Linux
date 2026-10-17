@@ -432,7 +432,10 @@ GtkWidget* buildPerKeyTab(App* app) {
     gtk_box_pack_start(GTK_BOX(row), app->perKeyLayer, FALSE, FALSE, 0);
     button(row, "Write", G_CALLBACK(+[](GtkButton*, gpointer d) {
                App* app = static_cast<App*>(d);
-               guarded(app, [&] { app->kb->setUserPicture(uint8_t(spinValue(app->perKeyLayer)), app->perKeyColors); });
+               guarded(app, [&] {
+                   app->kb->leaveUserAnimation();
+                   app->kb->setUserPicture(uint8_t(spinValue(app->perKeyLayer)), app->perKeyColors);
+               });
            }),
            app, true);
     button(row, "Fill all...", G_CALLBACK(+[](GtkButton*, gpointer d) {

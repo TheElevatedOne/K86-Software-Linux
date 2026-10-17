@@ -57,6 +57,7 @@ OpenKeyboard openKeyboard(const std::string& path, bool force) {
     } else if (!ok.firmwareId && !force) {
         throw std::runtime_error("keyboard at " + info.path + " did not answer the device id query (0x8F)");
     }
+    ok.keyboard->setWaitForCommit(true);
     return ok;
 }
 
