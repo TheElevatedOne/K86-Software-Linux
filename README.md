@@ -8,7 +8,7 @@ It consists of
 
 * `k86core` – a dependency-free C++17 library (Linux `hidraw`),
 * `k86ctl` – a command line tool,
-* `k86-gui` – an optional Qt 6 GUI.
+* `k86-gui` – an optional GTK 3 GUI (plain GTK, no libadwaita).
 
 Both K86 firmware families known to the original driver are supported:
 
@@ -34,14 +34,17 @@ connect the keyboard with the USB cable.
 ## Build
 
 ```sh
-sudo apt install build-essential cmake qt6-base-dev   # Qt only needed for the GUI
+sudo apt install build-essential cmake pkg-config libgtk-3-dev   # GTK only needed for the GUI
+# Fedora: sudo dnf install gcc-c++ cmake pkgconf gtk3-devel
+# Arch:   sudo pacman -S base-devel cmake gtk3
 cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build        # protocol tests
 sudo cmake --install build    # installs k86ctl, k86-gui and the udev rule
 ```
 
-Use `-DK86_BUILD_GUI=OFF` to build without Qt.
+Use `-DK86_BUILD_GUI=OFF` to build without GTK. `k86-gui --dry-run=v1|v2` opens the GUI against a
+simulated keyboard.
 
 ### Permissions
 
