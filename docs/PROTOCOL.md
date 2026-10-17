@@ -21,7 +21,7 @@ Reverse engineered from the official Windows driver
 
 | Name in driver | Chip | VID:PID | Firmware id (cmd 0x8F) | Profiles | Extra |
 |---|---|---|---|---|---|
-| `yc3121_sg8967_3m_soc` | YC3121 | 3151:4015 | 1168 | 3 | 240×135 LCD |
+| `yc3121_sg8967_3m_soc` | YC3121 | 3151:4015 | 1168 | 3 | 240×135 LCD, side light (see below) |
 | `yc3123_sg_sg8967_3m_1k` | YC3123 | 3151:5002 | 2730 | 3 | 240×135 LCD, side light, Win/Mac Fn layers |
 
 Other keyboards use the same VID:PID, so the firmware id is checked before writing.
@@ -80,7 +80,7 @@ Not verified on the YC3123, where it is off.
 | Set / get debounce | `11 00 ms` / `91` → [2] | `06 ms` / `86` → [1] |
 | Set / get sleep | `12`, u16 LE at [8..15] / `92` → [1..8] | `11`, [8..15] / `91` → [8..15] |
 | Set / get backlight (Bit8) | `07 …` / `87` | same (different speed scale) |
-| Set / get side light (Bit8) | – | `08 …` / `88` |
+| Set / get side light (Bit8) | `08 …` / `88` (not used by the original) | `08 …` / `88` |
 | Options | `06 00 flags fn pwr` / `86 00` → [2..4] | `09 00 fnLayer anti rt/25 wasd` / `89` → [1..5]; `85` → [1] |
 | Key matrix read | `89 P pg` ×8 → 512 bytes | `8A P FF pg 00` ×8 |
 | Key matrix write | `09 P F8 01 pg` + 56 ×9 | `0A P FF pg len last 00` + 56 ×10 |
@@ -120,7 +120,8 @@ After a per-key animation upload (`18`/`19`) the YC3121 reports mode **66 (`0x42
 driver does not list. Per-key colour writes (`0C`) made in that mode read back fine but are
 discarded when the effect changes, so this port switches to "custom" (13) before writing them.
 
-Side light (`08`, YC3123): modes 0 off, 1 static, 2 breath, 3 neon (type byte 8), 4 wave,
+Side light (`08`): the original only sends it to the YC3123, but the YC3121 K86 has a side light
+that answers the same packets (mode, speed and colour checked on hardware). Modes 0 off, 1 static, 2 breath, 3 neon (type byte 8), 4 wave,
 5 snake, 6 music; speed is not inverted (0–3).
 
 ### Key actions (4 bytes per slot, 128 slots)

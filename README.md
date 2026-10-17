@@ -63,7 +63,7 @@ k86ctl info
 k86ctl light modes
 k86ctl light set wave --brightness 4 --speed 3 --option 1 --rainbow
 k86ctl light set static --color ff8800
-k86ctl sidelight set breath --color 00ffff          # YC3123 only
+k86ctl sidelight set breath --color 00ffff
 k86ctl keys                                          # key slot names
 k86ctl keymap set CapsLock LCtrl --layer 0
 k86ctl keymap set F12 consumer:Calculator --fn
@@ -93,7 +93,7 @@ then `7z x '$PLUGINSDIR/app-32.7z'`) and run
 ### Hardware
 
 Tested on a K86 YC3121 (`3151:4015`, firmware id 1168, USB version 0x0114) over USB: device
-queries, lighting, per-key colours and animation, key and Fn remapping (checked through the
+queries, lighting, side light, per-key colours and animation, key and Fn remapping (checked through the
 input reports), macros, profile, debounce, sleep timers, options, LCD images and GIFs, clock
 sync, and the GUI start-up. Factory reset and screen erase were not tried, and the
 YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md for the firmware timing this needed.

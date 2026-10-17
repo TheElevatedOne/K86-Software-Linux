@@ -73,7 +73,8 @@ std::vector<DeviceModel> buildModels() {
     a.lightModes = k86LightModes(3);
     a.maxBrightness = 4;
     a.maxSpeed = 4;
-    a.maxSideSpeed = 0;
+    a.sideLightModes = k86SideModes();  // not offered by the original for this chip
+    a.maxSideSpeed = 3;
     a.screenWidth = 240;
     a.screenHeight = 135;
     a.screenSlots = 5;
@@ -96,8 +97,6 @@ std::vector<DeviceModel> buildModels() {
     b.defaultMatrix = kK86v2Matrix;
     b.defaultFnMatrix = kK86v2FnMatrix;
     b.lightModes = k86LightModes(5);
-    b.sideLightModes = k86SideModes();
-    b.maxSideSpeed = 3;
     b.canSyncSystemInfo = true;
     b.canSwitchLanguage = true;
     b.sleepMin = 0;
@@ -412,28 +411,6 @@ public:
         return t;
     }
 
-    void setSideLight(const LightSetting& l) override {
-        auto e = zeros(64);
-        e[0] = 0x08;
-        uint8_t a = uint8_t(l.option << 4 | (l.rainbow ? kDazzle : kNormal));
-        if (l.mode == 3) a = 8;                                       // neon
-        if (l.mode == 6) a = uint8_t(l.option << 4 | (l.rainbow ? 0 : 4));  // music
-        e[1] = l.mode;
-        e[2] = l.speed;
-        e[3] = l.brightness;
-        e[4] = a;
-        putColor(e, l.color);
-        s_.send(e, Checksum::Bit8);
-        vendorSleep();
-    }
-    std::optional<LightSetting> getSideLight() override {
-        auto t = zeros(64);
-        t[0] = 0x88;
-        Report e = s_.query(t, Checksum::Bit7);
-        if (e[1] > 6) return std::nullopt;
-        return decodeLight(e, e[2], e[1] == 6, kDazzle, kNormal);
-    }
-
     std::map<std::string, int> getOptions() override {
         Report e = s_.query({0x89, 0, 0, 0, 0, 0, 0, 0}, Checksum::Bit7);
         Report p = s_.query({0x85}, Checksum::Bit7);
@@ -655,11 +632,30 @@ bool Keyboard::leaveUserAnimation() {
     return true;
 }
 
-void Keyboard::setSideLight(const LightSetting&) {
-    throw std::runtime_error(model_.displayName + " has no side light");
+// Same packets on both chips; the original only uses them for the YC3123, but the YC3121 K86
+// answers them too.
+void Keyboard::setSideLight(const LightSetting& l) {
+    if (model_.sideLightModes.empty()) throw std::runtime_error(model_.displayName + " has no side light");
+    auto e = zeros(64);
+    e[0] = 0x08;
+    uint8_t a = uint8_t(l.option << 4 | (l.rainbow ? kDazzle : kNormal));
+    if (l.mode == 3) a = 8;                                       // neon
+    if (l.mode == 6) a = uint8_t(l.option << 4 | (l.rainbow ? 0 : 4));  // music
+    e[1] = l.mode;
+    e[2] = l.speed;
+    e[3] = l.brightness;
+    e[4] = a;
+    putColor(e, l.color);
+    s_.send(e, Checksum::Bit8);
+    vendorSleep();
 }
 std::optional<LightSetting> Keyboard::getSideLight() {
-    throw std::runtime_error(model_.displayName + " has no side light");
+    if (model_.sideLightModes.empty()) throw std::runtime_error(model_.displayName + " has no side light");
+    auto t = zeros(64);
+    t[0] = 0x88;
+    Report e = s_.query(t, Checksum::Bit7);
+    if (e[1] > 6) return std::nullopt;
+    return decodeLight(e, e[2], e[1] == 6, kDazzle, kNormal);
 }
 
 Macro Keyboard::getMacro(uint8_t index) {

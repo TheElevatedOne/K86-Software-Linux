@@ -37,7 +37,7 @@ Commands:
   profile [N]                           show / select the active profile (0-based)
   light [modes]                         show the current effect / list effects
   light set MODE [--brightness 0-4] [--speed 0-4] [--color RRGGBB] [--rainbow] [--option N]
-  sidelight [modes]                     side light (YC3123 only)
+  sidelight [modes]                     side light
   sidelight set MODE [--brightness 0-4] [--speed 0-3] [--color RRGGBB] [--rainbow]
   debounce [MS]                         show / set debounce time
   sleep [--sleep S] [--deep S]          show / set sleep timers in seconds (both radios)

@@ -261,7 +261,7 @@ void testGolden(const std::string& dir) {
             continue;
         }
         for (const auto& [name, fn] : scenarios()) {
-            if (mi == 0 && name.find("SideLight") != std::string::npos) continue;  // YC3121 K86 has none
+            if (mi == 0 && name.find("SideLight") != std::string::npos) continue;  // the original never sends these to the YC3121
             RecordingTransport t;
             auto kb = makeKeyboard(t, knownModels()[mi], [](int) {});
             fn(*kb);
