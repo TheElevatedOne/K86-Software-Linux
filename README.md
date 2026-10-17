@@ -1,6 +1,8 @@
 # Attack Shark K86 – Linux configuration software
 
-![Static Badge](https://img.shields.io/badge/CLAUDE-VIBECODED?style=for-the-badge&logo=claude&label=VIBECODED&labelColor=%23333333&color=%23de7356)
+![Static Badge](https://img.shields.io/badge/CLAUDE-VIBECODED?style=for-the-badge&logo=claude&label=VIBECODED&labelColor=%23333333&color=%23de7356) [![AUR Version](https://img.shields.io/aur/version/k86-software-bin?style=for-the-badge&logo=archlinux)
+](https://aur.archlinux.org/packages/k86-software-bin) [![AUR Version](https://img.shields.io/aur/version/k86-software-git?style=for-the-badge&logo=archlinux)
+](https://aur.archlinux.org/packages/k86-software-git)
 
 A C++ rewrite of the Windows-only Attack Shark K86 driver
 (`https://download.attackshark.pro/ATTACKSHARK/K86/ATTACKSHARKK86.zip`), based on reverse
