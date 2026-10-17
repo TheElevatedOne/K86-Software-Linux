@@ -4,10 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-The release workflow publishes the section whose version matches the tag (`v0.1.0` →
-`## [0.1.0]`) as the release notes, so add a section before tagging.
+The release workflow publishes the section whose version matches the tag (`0.1.0` →
+`## [0.1.0]`; a leading `v` is ignored) as the release notes, so add a section before tagging.
 
 ## [Unreleased]
+
+## [0.1.1] - 2026-10-18
 
 ### Added
 
@@ -42,5 +44,6 @@ First release.
   are no longer lost when written while an animation plays.
 - Side light support on the YC3121, which the original driver does not offer.
 
-[Unreleased]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/releases/tag/v0.1.0
+[Unreleased]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/0.1.0...0.1.1
+[0.1.0]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/releases/tag/0.1.0

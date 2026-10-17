@@ -40,7 +40,7 @@ jobs:
         run: |
           tag="${INPUT_TAG:-$(git tag --list --sort=-version:refname | head -n 1)}"
           if [ -z "$tag" ]; then
-            echo "::error::The repository has no tags. Create one first, e.g. git tag v0.1.0 && git push origin v0.1.0"
+            echo "::error::The repository has no tags. Create one first, e.g. git tag 0.1.1 && git push origin 0.1.1"
             exit 1
           fi
           if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then

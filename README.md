@@ -106,8 +106,8 @@ each with a `.sha256` file and a combined `SHA256SUMS` (`sha256sum -c SHA256SUMS
 packages install the udev rule, so no extra permission setup is needed.
 
 To make a release: set the version in `CMakeLists.txt`, add its section to
-[CHANGELOG.md](CHANGELOG.md), commit, then tag and push (`git tag v0.1.0 && git push origin
-v0.1.0`) and run the **Release** workflow from the Actions tab. It builds the newest tag (or
+[CHANGELOG.md](CHANGELOG.md), commit, then tag and push (`git tag 0.1.1 && git push origin
+0.1.1`) and run the **Release** workflow from the Actions tab. It builds the newest tag (or
 the one you enter), checks that it matches the CMake version, and creates or updates the
 GitHub release with the changelog section as its notes.
 
