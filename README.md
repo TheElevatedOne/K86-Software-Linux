@@ -97,3 +97,12 @@ queries, lighting, side light, per-key colours and animation, key and Fn remappi
 input reports), macros, profile, debounce, sleep timers, options, LCD images and GIFs, clock
 sync, and the GUI start-up. Factory reset and screen erase were not tried, and the
 YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md for the firmware timing this needed.
+
+## License
+
+GPL-3.0, see [LICENSE](LICENSE). `third_party/stb/stb_image.h` is by Sean Barrett and is
+public domain / MIT (see the end of that file).
+
+Not affiliated with Attack Shark or RongYuan. The original driver is not included (apart from a
+few small helper functions in `tests/js/stub_index.js`); the golden test data is the output of
+running it.
