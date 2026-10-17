@@ -27,6 +27,9 @@ contents:
     dst: /usr/lib/udev/rules.d/70-attackshark-k86.rules
   - src: stage/usr/share/applications/k86-gui.desktop
     dst: /usr/share/applications/k86-gui.desktop
+  - src: stage/usr/share/icons
+    dst: /usr/share/icons
+    type: tree
   - src: README.md
     dst: /usr/share/doc/attackshark-k86/README.md
   - src: docs/PROTOCOL.md

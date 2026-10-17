@@ -24,7 +24,8 @@ package() {
   cd "$_tarname-$pkgver-linux-$CARCH"
   install -Dm755 bin/k86ctl bin/k86-gui -t "$pkgdir/usr/bin"
   install -Dm644 lib/udev/rules.d/70-attackshark-k86.rules -t "$pkgdir/usr/lib/udev/rules.d"
-  install -Dm644 share/applications/k86-gui.desktop -t "$pkgdir/usr/share/applications"
+  # Desktop entry and icons
+  find share -type f -exec install -Dm644 {} "$pkgdir/usr/{}" \;
   install -Dm644 README.md PROTOCOL.md CHANGELOG.md -t "$pkgdir/usr/share/doc/$_pkgname"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }

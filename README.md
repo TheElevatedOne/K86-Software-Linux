@@ -114,7 +114,8 @@ GitHub release with the changelog section as its notes.
 ## License
 
 GPL-3.0, see [LICENSE](LICENSE). `third_party/stb/stb_image.h` is by Sean Barrett and is
-public domain / MIT (see the end of that file).
+public domain / MIT (see the end of that file). The icon in `packaging/icons` is the Attack Shark
+logo from the official driver; it is Attack Shark's trademark and not covered by the GPL.
 
 Not affiliated with Attack Shark or RongYuan. The original driver is not included (apart from a
 few small helper functions in `tests/js/stub_index.js`); the golden test data is the output of

@@ -9,6 +9,10 @@ The release workflow publishes the section whose version matches the tag (`v0.1.
 
 ## [Unreleased]
 
+### Added
+
+- Attack Shark icon for the GUI's window and desktop entry.
+
 ## [0.1.0] - 2026-10-18
 
 First release.

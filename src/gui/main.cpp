@@ -887,6 +887,7 @@ int main(int argc, char** argv) {
 
     App app;
     app.dryRun = opt.dryRun;
+    gtk_window_set_default_icon_name("k86-gui");
     app.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(app.window), "Attack Shark K86");
     gtk_window_set_default_size(GTK_WINDOW(app.window), 900, 680);
