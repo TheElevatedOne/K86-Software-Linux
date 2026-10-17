@@ -1,0 +1,5 @@
+# Attack Shark K86: give the logged-in user access to the keyboard's hidraw nodes so that
+# k86ctl / k86-gui work without root.
+#   sudo cp 70-attackshark-k86.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4015", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="5002", TAG+="uaccess"
