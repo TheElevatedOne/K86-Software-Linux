@@ -98,6 +98,19 @@ input reports), macros, profile, debounce, sleep timers, options, LCD images and
 sync, and the GUI start-up. Factory reset and screen erase were not tried, and the
 YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md for the firmware timing this needed.
 
+## Releases
+
+Prebuilt binaries (`.tar.gz`) and `.deb`, `.rpm` and pacman packages for x86_64 and aarch64
+are on the [releases page](https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/releases),
+each with a `.sha256` file and a combined `SHA256SUMS` (`sha256sum -c SHA256SUMS`). The
+packages install the udev rule, so no extra permission setup is needed.
+
+To make a release: set the version in `CMakeLists.txt`, add its section to
+[CHANGELOG.md](CHANGELOG.md), commit, then tag and push (`git tag v0.1.0 && git push origin
+v0.1.0`) and run the **Release** workflow from the Actions tab. It builds the newest tag (or
+the one you enter), checks that it matches the CMake version, and creates or updates the
+GitHub release with the changelog section as its notes.
+
 ## License
 
 GPL-3.0, see [LICENSE](LICENSE). `third_party/stb/stb_image.h` is by Sean Barrett and is

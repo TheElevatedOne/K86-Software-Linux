@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Attack Shark K86
+Comment=Configure the Attack Shark K86 keyboard
+Exec=k86-gui
+Icon=input-keyboard
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=keyboard;rgb;macro;lcd;

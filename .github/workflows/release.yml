@@ -1,0 +1,194 @@
+# Builds the newest tag (or the given one) for every supported Linux architecture and
+# attaches the binaries, packages and SHA-256 sums to its GitHub release. The release notes
+# are the tag's section in CHANGELOG.md.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release (leave empty for the newest tag)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NFPM_VERSION: 2.47.0
+
+jobs:
+  prepare:
+    name: Pick tag and release notes
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pick the tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${INPUT_TAG:-$(git tag --list --sort=-version:refname | head -n 1)}"
+          if [ -z "$tag" ]; then
+            echo "::error::The repository has no tags. Create one first, e.g. git tag v0.1.0 && git push origin v0.1.0"
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag does not exist"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
+
+      - name: Check the version and extract the changelog
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          git checkout -q "$TAG"
+          cmake_version=$(sed -n 's/^project([^ ]* VERSION \([^ )]*\).*/\1/p' CMakeLists.txt)
+          if [ "$cmake_version" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match the project version $cmake_version in CMakeLists.txt"
+            exit 1
+          fi
+          # The lines between "## [VERSION]" and the next section or the link references.
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found && /^\[[^]]+\]: / { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md at $TAG has no \"## [$VERSION]\" section"
+            exit 1
+          fi
+          cat release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x86_64
+            pkgarch: amd64
+            runner: ubuntu-22.04
+            nfpm: x86_64
+            nfpm_sha256: 0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783
+          - arch: aarch64
+            pkgarch: arm64
+            runner: ubuntu-22.04-arm
+            nfpm: arm64
+            nfpm_sha256: 1c0f5f2999b9a974bfb04fdb0cc3306096de530ac5dbb25d739cc5f5219c919c
+    # Ubuntu 22.04 (glibc 2.35) keeps the binaries usable on older distributions.
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config libgtk-3-dev
+
+      - name: Install nfpm
+        run: |
+          f="nfpm_${NFPM_VERSION}_Linux_${{ matrix.nfpm }}.tar.gz"
+          curl -sSfLO "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/$f"
+          echo "${{ matrix.nfpm_sha256 }}  $f" | sha256sum -c -
+          sudo tar -xzf "$f" -C /usr/local/bin nfpm
+          nfpm --version
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Stage the install tree
+        run: |
+          DESTDIR="$PWD/stage" cmake --install build --strip
+          test -x stage/usr/bin/k86ctl
+          test -x stage/usr/bin/k86-gui
+          find stage -type f | sort
+
+      - name: Package
+        env:
+          ARCH: ${{ matrix.pkgarch }}
+        run: |
+          mkdir -p dist
+          name="attackshark-k86-${VERSION}-linux-${{ matrix.arch }}"
+          mkdir -p "$name"
+          cp -a stage/usr/. "$name/"
+          cp README.md CHANGELOG.md LICENSE docs/PROTOCOL.md "$name/"
+          tar --owner=0 --group=0 -czf "dist/$name.tar.gz" "$name"
+          for packager in deb rpm archlinux; do
+            nfpm package --config packaging/nfpm.yaml --packager "$packager" --target dist/
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: SHA-256 sums
+        working-directory: dist
+        run: |
+          sha256sum -- * > ../SHA256SUMS
+          for f in *; do sha256sum -- "$f" > "$f.sha256"; done
+          mv ../SHA256SUMS .
+          cat SHA256SUMS
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" dist/* --clobber
