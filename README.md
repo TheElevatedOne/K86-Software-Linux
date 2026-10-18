@@ -128,10 +128,15 @@ then `7z x '$PLUGINSDIR/app-32.7z'`) and run
 Tested on a K86 YC3121 (`3151:4015`, firmware id 1168, USB version 0x0114) over USB: device
 queries, lighting, side light, per-key colours and animation, key and Fn remapping (checked through the
 input reports), macros, profile, debounce, sleep timers, options, LCD images and GIFs, clock
-sync. The GUI's preload was checked read-only against the keyboard; its write paths are checked
-by `k86-gui --self-test` against the protocol simulator. Factory reset and screen erase were not
-tried, and the
-YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md for the firmware timing this needed.
+sync. The GUI's preload and every `k86ctl` read command were checked read-only against the
+keyboard. The GUI's write paths are checked by `k86-gui --self-test` against the protocol
+simulator for both firmwares: key, Fn layer, macro and profile assignment, lighting and side light,
+per-key colours and patterns, macro editing and recording, screen upload and clock, settings,
+read-only mode, confirmations, factory reset and unplugging / replugging. Factory reset and screen
+erase were not tried on hardware, and the YC3123 (`3151:5002`) is untested. See docs/PROTOCOL.md
+for the firmware timing this needed.
+
+The self-test needs a display; `ctest` skips it without one (CI runs it under `xvfb-run`).
 
 ## Releases
 

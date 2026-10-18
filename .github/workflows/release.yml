@@ -109,7 +109,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config libgtk-3-dev
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config libgtk-3-dev xvfb xauth
 
       - name: Install nfpm
         run: |
@@ -124,8 +124,9 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build -j"$(nproc)"
 
+      # Xvfb gives the GUI self-tests (k86-gui --self-test) a display to run on.
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: xvfb-run -a ctest --test-dir build --output-on-failure
 
       - name: Stage the install tree
         run: |

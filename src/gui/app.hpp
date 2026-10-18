@@ -70,6 +70,8 @@ struct App {
     guint hotplugTimer = 0;
     bool connecting = false;
     int updating = 0;  // > 0 while widgets are filled from the cache (suppresses writes)
+    std::optional<bool> autoConfirm;  // self-test: answer confirmations without a dialog
+    int errorCount = 0;               // errors shown so far (checked by the self-test)
 
     // Writes are refused up front in read-only mode; returns false then.
     bool canWrite();

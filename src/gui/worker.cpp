@@ -115,10 +115,14 @@ void Worker::dropQueued(const std::string& what) {
 void Worker::post(const std::string& what, Job job, std::function<void()> ok,
                   std::function<void(const std::string&)> fail) {
     enqueue({what, [this, what, job, ok, fail] {
-                 std::string error;
                  if (!dev_.keyboard) {
-                     error = "no keyboard connected";
-                 } else {
+                     // The device went away while this job was queued: the window already shows
+                     // that, so drop the job quietly instead of reporting one error per job.
+                     runOnMain([this, what] { finished(what); });
+                     return;
+                 }
+                 std::string error;
+                 {
                      ProgressFn progress = [this](double f, const std::string& text) {
                          runOnMain([this, f, text] {
                              if (onProgress) onProgress(f, text);

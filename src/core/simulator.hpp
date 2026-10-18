@@ -8,6 +8,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <stdexcept>
 #include <vector>
@@ -41,6 +42,8 @@ public:
     } state;
 
     void reset();  // factory state
+    // Simulates pulling the cable: every report fails like a vanished hidraw node (ENODEV).
+    std::atomic<bool> unplugged{false};
 
 private:
     const DeviceModel& m_;
@@ -48,6 +51,7 @@ private:
     std::vector<Report> writes_;
     bool v2() const { return m_.chip == Chip::YC3123; }
     void record(const Report& r);
+    void checkPlugged() const;
 };
 
 struct ReadOnlyError : std::runtime_error {

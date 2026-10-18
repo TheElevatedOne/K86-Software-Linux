@@ -51,10 +51,14 @@ void dialog(App* app, GtkMessageType type, const std::string& text) {
 
 }  // namespace
 
-void App::error(const std::string& text) { dialog(this, GTK_MESSAGE_ERROR, text); }
+void App::error(const std::string& text) {
+    ++errorCount;
+    dialog(this, GTK_MESSAGE_ERROR, text);
+}
 void App::info(const std::string& text) { dialog(this, GTK_MESSAGE_INFO, text); }
 
 bool App::confirm(const std::string& text) {
+    if (autoConfirm) return *autoConfirm;
     if (!opt.screenshot.empty()) return false;
     GtkWidget* d = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
                                           GTK_BUTTONS_YES_NO, "%s", text.c_str());

@@ -29,7 +29,8 @@ build() {
 }
 
 check() {
-  ctest --test-dir build --output-on-failure
+  # Protocol tests only; the GUI self-test needs a display (run it with `ctest` in a session).
+  ctest --test-dir build --output-on-failure -R '^k86tests$'
 }
 
 package() {

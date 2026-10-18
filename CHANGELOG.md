@@ -32,6 +32,7 @@ The release workflow publishes the section whose version matches the tag (`0.1.0
 - `k86-gui --read-only` (nothing is ever written), `--page`, and `--self-test`, which clicks
   through every page against a simulated keyboard and checks the result (also run by `ctest`).
 - Protocol simulator (`SimulatedTransport`) used by `--dry-run`, the self-test and the unit tests.
+- The release workflow runs the GUI self-tests under Xvfb.
 
 ### Changed
 

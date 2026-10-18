@@ -1,6 +1,11 @@
 // k86-gui --self-test: drives the real widgets against the simulated keyboard and checks what
 // ends up in its memory. Covers the write paths of every page without touching hardware.
+#include <glib/gstdio.h>
+#include <unistd.h>
+
+#include <algorithm>
 #include <iostream>
+#include <memory>
 
 #include "app.hpp"
 #include "layout.hpp"
@@ -46,17 +51,59 @@ void walk(GtkWidget* w, const std::function<bool(GtkWidget*)>& f) {
     }
 }
 
-GtkWidget* findButton(GtkWidget* root, const std::string& text) {
+GtkWidget* findButton(GtkWidget* root, const std::string& text, int index = 0) {
     GtkWidget* found = nullptr;
+    int n = 0;
     walk(root, [&](GtkWidget* w) {
         if (found) return false;
         const char* l = nullptr;
         if (GTK_IS_BUTTON(w)) l = gtk_button_get_label(GTK_BUTTON(w));
         if (GTK_IS_MENU_ITEM(w)) l = gtk_menu_item_get_label(GTK_MENU_ITEM(w));
-        if (l && text == l) found = w;
+        if (l && text == l && n++ == index) found = w;
         return true;
     });
     return found;
+}
+
+GtkWidget* findTooltip(GtkWidget* root, const std::string& text, int index = 0) {
+    GtkWidget* found = nullptr;
+    int n = 0;
+    walk(root, [&](GtkWidget* w) {
+        if (found) return false;
+        gchar* t = gtk_widget_get_tooltip_text(w);
+        if (t && text == t && GTK_IS_BUTTON(w) && n++ == index) found = w;
+        g_free(t);
+        return true;
+    });
+    return found;
+}
+
+// The value widget next to a label in a two-column grid.
+GtkWidget* gridValue(GtkWidget* root, const std::string& text) {
+    GtkWidget* found = nullptr;
+    walk(root, [&](GtkWidget* w) {
+        if (found) return false;
+        if (GTK_IS_GRID(w))
+            for (int r = 0; r < 32 && !found; ++r) {
+                GtkWidget* l = gtk_grid_get_child_at(GTK_GRID(w), 0, r);
+                if (l && GTK_IS_LABEL(l) && text == gtk_label_get_text(GTK_LABEL(l)))
+                    found = gtk_grid_get_child_at(GTK_GRID(w), 1, r);
+            }
+        return true;
+    });
+    return found;
+}
+
+// A key press or release as the window would get it from the display server.
+void sendKey(App* app, unsigned keycode, bool press) {
+    GdkEvent* e = gdk_event_new(press ? GDK_KEY_PRESS : GDK_KEY_RELEASE);
+    GdkWindow* win = gtk_widget_get_window(app->window);
+    e->key.window = win ? GDK_WINDOW(g_object_ref(win)) : nullptr;
+    e->key.hardware_keycode = guint16(keycode);
+    e->key.time = GDK_CURRENT_TIME;
+    gboolean handled = FALSE;
+    g_signal_emit_by_name(app->window, press ? "key-press-event" : "key-release-event", e, &handled);
+    gdk_event_free(e);
 }
 
 template <typename T>
@@ -112,6 +159,33 @@ SimulatedTransport::State snapshot(App* app, SimulatedTransport* sim) {
     app->worker.post("Self-test snapshot", [sim, out](Keyboard&, const Worker::ProgressFn&) { *out = sim->state; });
     settle(app);
     return *out;
+}
+
+// Runs a read on the worker thread through the keyboard API (the simulator answers it).
+template <typename T>
+T readBack(App* app, std::function<T(Keyboard&)> f) {
+    auto out = std::make_shared<T>();
+    app->worker.post("Self-test read", [f, out](Keyboard& kb, const Worker::ProgressFn&) { *out = f(kb); });
+    settle(app);
+    return *out;
+}
+
+size_t writeCount(App* app, SimulatedTransport* sim) {
+    auto n = std::make_shared<size_t>(0);
+    app->worker.post("Self-test count", [sim, n](Keyboard&, const Worker::ProgressFn&) { *n = sim->writes().size(); });
+    settle(app);
+    return *n;
+}
+
+// Number of reports with command `cmd` written since write number `mark`.
+size_t commandsSince(App* app, SimulatedTransport* sim, size_t mark, uint8_t cmd) {
+    auto n = std::make_shared<size_t>(0);
+    app->worker.post("Self-test count", [sim, n, mark, cmd](Keyboard&, const Worker::ProgressFn&) {
+        const auto& w = sim->writes();
+        for (size_t i = mark; i < w.size(); ++i) *n += w[i][0] == cmd;
+    });
+    settle(app);
+    return *n;
 }
 
 KeyAction at(const KeyMatrix& m, int slot) { return matrixAction(m, slot); }
@@ -265,17 +339,227 @@ int runSelfTest(App* app, SimulatedTransport* sim) {
     settle(app);
     check(snapshot(app, sim).debounce == 8, "debounce 8 written");
 
-    // Restore factory layout of profile 1 (confirmations are answered "no" in tests, so call
-    // the write directly through the cache check: nothing must have been written).
-    size_t before = 0;
-    app->worker.post("count", [sim, &before](Keyboard&, const Worker::ProgressFn&) { before = sim->writes().size(); });
+    // Lighting details: brightness, speed and direction of the backlight (Wave), then the side light.
+    click(findButton(light, "Wave"), "Wave effect");
     settle(app);
+    GtkRange* bright = findOf<GtkRange>(light, 0, [](GtkWidget* w) -> bool { return GTK_IS_SCALE(w); });
+    GtkRange* speed = findOf<GtkRange>(light, 1, [](GtkWidget* w) -> bool { return GTK_IS_SCALE(w); });
+    GtkComboBox* dir = findOf<GtkComboBox>(light, 0, [](GtkWidget* w) -> bool { return GTK_IS_COMBO_BOX(w); });
+    if (bright) gtk_range_set_value(bright, 2);
+    if (speed) gtk_range_set_value(speed, 1);
+    if (dir) gtk_combo_box_set_active(dir, 1);
+    settle(app);
+    auto lit = readBack<std::optional<LightSetting>>(app, [](Keyboard& kb) { return kb.getLight(); });
+    check(lit && lit->mode == 4 && lit->brightness == 2 && lit->speed == 1 && lit->option == 1,
+          "backlight -> wave, brightness 2, speed 1, direction 2 written");
+    if (!m.sideLightModes.empty()) {
+        click(findButton(light, "Static", 1), "side light Static effect");
+        settle(app);
+        click(findTooltip(light, "Purple", 1), "side light purple swatch");
+        settle(app);
+        auto side = readBack<std::optional<LightSetting>>(app, [](Keyboard& kb) { return kb.getSideLight(); });
+        check(side && side->mode == 1 && !side->rainbow && app->cache.side && side->color == app->cache.side->color &&
+                  side->color != 0,
+              "side light -> static purple written");
+        lit = readBack<std::optional<LightSetting>>(app, [](Keyboard& kb) { return kb.getLight(); });
+        check(lit && lit->mode == 4, "side light change leaves the backlight alone");
+    }
+
+    // Per-key colours: fill everything red; "Use the Custom effect" switches the backlight.
+    GtkWidget* red = findTooltip(pk, "Red");
+    click(red, "red swatch");
+    click(findButton(pk, "Fill all"), "Fill all button");
+    click(findButton(pk, "Apply to keyboard"), "Apply to keyboard");
+    click(findButton(pk, "Use the Custom effect"), "Use the Custom effect button");
+    settle(app);
+    st = snapshot(app, sim);
+    check(st.pictures[0][size_t(caps) * 3] == 0xFF && st.pictures[0][size_t(caps) * 3 + 1] == 0 &&
+              st.pictures[0][size_t(w) * 3] == 0xFF,
+          "Fill all red written");
+    lit = readBack<std::optional<LightSetting>>(app, [](Keyboard& kb) { return kb.getLight(); });
+    check(lit && lit->mode == 13, "backlight -> Custom effect");
+    if (m.chip == Chip::YC3123) {
+        // Pattern 3: paint Esc green and apply; pattern 1 must stay red.
+        GtkComboBox* pat = findOf<GtkComboBox>(pk, 0, [](GtkWidget* w) -> bool { return GTK_IS_COMBO_BOX(w); });
+        if (pat) gtk_combo_box_set_active(pat, 2);
+        pump(30);
+        click(findTooltip(pk, "Green"), "green swatch");
+        pv[0]->onDrag(esc);
+        click(findButton(pk, "Apply to keyboard"), "Apply to keyboard (pattern 3)");
+        settle(app);
+        st = snapshot(app, sim);
+        check(st.pictures[2][size_t(esc) * 3 + 1] == 0xFF && st.pictures[2][size_t(esc) * 3] == 0 &&
+                  st.pictures[0][size_t(esc) * 3] == 0xFF,
+              "pattern 3 written, pattern 1 untouched");
+        if (pat) gtk_combo_box_set_active(pat, 0);
+        pump(30);
+    }
+
+    // Macro editor: record from the keyboard (A, B with auto-repeat), add a mouse click, edit.
+    page(app, "macros");
+    gtk_list_box_select_row(list, gtk_list_box_get_row_at_index(list, 2));
+    pump(30);
+    GtkWidget* rec = findButton(mac, "● Record");
+    check(rec != nullptr, "found the Record button");
+    if (rec) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rec), TRUE);
+        const unsigned kA = 30 + 8, kB = 48 + 8;  // evdev KEY_A / KEY_B as X11 key codes
+        sendKey(app, kA, true);
+        pump(40);
+        sendKey(app, kA, true);  // auto-repeat: ignored
+        pump(40);
+        sendKey(app, kA, false);
+        pump(20);
+        sendKey(app, kB, true);
+        sendKey(app, kB, false);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(rec), FALSE);
+        click(findButton(mac, "Right"), "Add mouse click > Right");
+        click(findButton(mac, "Save to keyboard"), "Save to keyboard (recorded)");
+        settle(app);
+        st = snapshot(app, sim);
+        got = decodeMacro(std::vector<uint8_t>(st.macros[2].begin(), st.macros[2].end()));
+        bool shape = got.events.size() == 6 && got.events[0].code == 0x04 && got.events[1].code == 0x04 &&
+                     got.events[2].code == 0x05 && got.events[3].code == 0x05 &&
+                     got.events[4].type == MacroEvent::Type::MouseDown && got.events[5].type == MacroEvent::Type::MouseUp;
+        check(shape, "recorded macro 3 written: " + macroToString(got));
+        check(shape && got.events[0].delayMs >= 70 && got.events[1].delayMs >= 15 && got.events[3].delayMs == 10,
+              "recorded delays follow the real timing");
+    }
+    // Clear macro 2 and save: the slot is emptied on the keyboard.
+    gtk_list_box_select_row(list, gtk_list_box_get_row_at_index(list, 1));
+    pump(30);
+    click(findButton(mac, "Clear"), "Clear button");
+    click(findButton(mac, "Save to keyboard"), "Save to keyboard (cleared)");
+    settle(app);
+    st = snapshot(app, sim);
+    check(decodeMacro(std::vector<uint8_t>(st.macros[1].begin(), st.macros[1].end())).events.empty(),
+          "cleared macro 2 written");
+
+    // Screen: clock, still image upload.
+    GtkWidget* scr = page(app, "screen");
+    size_t mark = writeCount(app, sim);
+    click(findButton(scr, "Set the clock to this computer's time"), "Set the clock button");
+    settle(app);
+    st = snapshot(app, sim);
+    check(commandsSince(app, sim, mark, 0x28) == 1, "clock set");
+    gchar* tmpPath = nullptr;
+    int fd = g_file_open_tmp("k86-selftest-XXXXXX.png", &tmpPath, nullptr);
+    if (fd >= 0) close(fd);
+    GdkPixbuf* pb = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, 64, 36);
+    gdk_pixbuf_fill(pb, 0x3366ccff);
+    bool saved = tmpPath && gdk_pixbuf_save(pb, tmpPath, "png", nullptr, nullptr);
+    g_object_unref(pb);
+    GtkWidget* chooser = findOf<GtkWidget>(scr, 0, [](GtkWidget* w) -> bool { return GTK_IS_FILE_CHOOSER(w); });
+    if (saved && chooser) {
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(chooser), tmpPath);
+        for (int i = 0; i < 100; ++i) {
+            gchar* f = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+            bool ok = f != nullptr;
+            g_free(f);
+            if (ok) break;
+            pump(10);
+        }
+        mark = writeCount(app, sim);
+        click(findButton(scr, "Upload"), "Upload button");
+        settle(app);
+        check(commandsSince(app, sim, mark, 0xA5) == 1 && commandsSince(app, sim, mark, 0x25) > 0,
+              "image upload announced and streamed");
+    } else {
+        check(false, "test image prepared");
+    }
+    if (tmpPath) g_unlink(tmpPath), g_free(tmpPath);
+
+    // Settings: an option switch and the sleep times.
+    page(app, "settings");
+    GtkWidget* sw = gridValue(set, "Swap WASD and the arrow keys");
+    if (sw) gtk_switch_set_active(GTK_SWITCH(sw), TRUE);
+    GtkWidget* sleepBt = gridValue(set, "Sleep after, Bluetooth (s)");
+    if (sleepBt) gtk_spin_button_set_value(GTK_SPIN_BUTTON(sleepBt), 300);
+    click(findButton(set, "Save settings"), "Save settings (options, sleep)");
+    settle(app);
+    auto opts = readBack<std::map<std::string, int>>(app, [](Keyboard& kb) { return kb.getOptions(); });
+    auto slp = readBack<std::optional<SleepTimes>>(app, [](Keyboard& kb) { return kb.getSleep(); });
+    check(sw && opts.count("wasdSwap") && opts["wasdSwap"] == 1, "WASD swap option written");
+    check(slp && slp->bluetooth == 300, "Bluetooth sleep 300 s written");
+    check(app->errorCount == 0, "no errors so far");
+    // An out-of-range sleep time is refused before anything is sent.
+    int errs = app->errorCount;
+    mark = writeCount(app, sim);
+    GtkWidget* deepBt = gridValue(set, "Deep sleep after, Bluetooth (s)");
+    if (deepBt) gtk_spin_button_set_value(GTK_SPIN_BUTTON(deepBt), 1);  // below the minimum on both chips
+    click(findButton(set, "Save settings"), "Save settings (invalid)");
+    settle(app);
+    check(app->errorCount == errs + 1 && writeCount(app, sim) == mark, "invalid sleep time refused");
+    click(findButton(set, "Revert"), "Revert settings");
+    pump(30);
+    check(deepBt && gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(deepBt)) == slp->deepBluetooth,
+          "Revert restores the form");
+
+    // Read-only mode refuses writes in the window itself.
+    app->opt.readOnly = true;
+    errs = app->errorCount;
+    mark = writeCount(app, sim);
+    page(app, "keys");
+    kv[0]->onClick(caps, false);
+    kv[1]->onClick(lctrl, false);
+    click(findButton(set, "Save settings"), "Save settings (read-only)");
+    settle(app);
+    check(writeCount(app, sim) == mark && app->errorCount > errs, "read-only mode writes nothing");
+    check(at(app->cache.keymaps[0], caps) == (KeyAction{0, 0, 0x39, 0}), "read-only mode leaves the cache alone");
+    app->opt.readOnly = false;
+    errs = app->errorCount;
+
+    // Confirmations: "no" writes nothing, "yes" restores the factory layout of the profile.
+    page(app, "keys");
+    kv[0]->onClick(caps, false);
+    kv[1]->onClick(lctrl, false);
+    settle(app);
+    app->autoConfirm = false;
+    mark = writeCount(app, sim);
     click(findButton(keys, "Restore factory layout…"), "Restore factory layout button");
     settle(app);
-    size_t after = 0;
-    app->worker.post("count", [sim, &after](Keyboard&, const Worker::ProgressFn&) { after = sim->writes().size(); });
+    check(writeCount(app, sim) == mark, "declined confirmation writes nothing");
+    app->autoConfirm = true;
+    click(findButton(keys, "Restore factory layout…"), "Restore factory layout button");
     settle(app);
-    check(before == after, "declined confirmation writes nothing");
+    st = snapshot(app, sim);
+    check(std::equal(st.keymaps[0].begin(), st.keymaps[0].end(), m.defaultMatrix), "factory layout restored");
+    check(at(st.keymaps[1], esc) == (KeyAction{0, 0, 0x35, 0}), "other profiles keep their changes");
+
+    // Factory reset, then everything is read again.
+    click(findButton(set, "Factory reset…"), "Factory reset button");
+    settle(app);
+    settle(app);
+    st = snapshot(app, sim);
+    check(st.debounce == 5 && std::equal(st.keymaps[1].begin(), st.keymaps[1].end(), m.defaultMatrix),
+          "factory reset sent");
+    check(app->cache.debounce == 5 && at(app->cache.keymaps[1], esc) == (KeyAction{0, 0, 0x29, 0}) &&
+              app->cache.light && app->cache.light->mode == st.light[0],
+          "window re-read the keyboard after the reset");
+    app->autoConfirm.reset();
+
+    // Pulling the cable: a write fails with ENODEV, the queued reads are dropped without an error
+    // each, the window shows the "connect your keyboard" page and picks the keyboard up again (the
+    // dry run reconnects a fresh simulator on the next hotplug poll). `sim` is gone after this.
+    app->worker.post("Self-test unplug", [sim](Keyboard&, const Worker::ProgressFn&) { sim->unplugged = true; });
+    page(app, "keys");
+    kv[0]->onClick(caps, false);
+    kv[1]->onClick(lctrl, false);
+    app->reload();
+    settle(app);
+    check(!app->worker.connected() && app->worker.pending() == 0, "unplugged keyboard noticed");
+    check(std::string(gtk_stack_get_visible_child_name(GTK_STACK(app->outer))) == "empty",
+          "window shows the connect page");
+    for (int i = 0; i < 800 && !(app->worker.connected() && app->worker.pending() == 0 && app->cache.loaded); ++i)
+        pump(10);
+    settle(app);
+    check(app->worker.connected() && app->cache.loaded &&
+              std::string(gtk_stack_get_visible_child_name(GTK_STACK(app->outer))) == "pages",
+          "keyboard picked up again and read");
+    check(app->cache.keymaps.size() == size_t(m.layers) && at(app->cache.keymaps[0], caps) == (KeyAction{0, 0, 0x39, 0}),
+          "fresh key maps after reconnecting");
+
+    check(app->errorCount == errs, "no unexpected errors (" + std::to_string(app->errorCount) + " shown)");
 
     std::cout << (failures ? "self-test FAILED (" + std::to_string(failures) + ")" : std::string("self-test passed"))
               << "\n";

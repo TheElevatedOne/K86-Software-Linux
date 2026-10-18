@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstring>
 
@@ -87,9 +88,17 @@ void SimulatedTransport::record(const Report& r) {
     if (onWrite) onWrite(r);
 }
 
-Report SimulatedTransport::getFeature() { return reply_; }
+void SimulatedTransport::checkPlugged() const {
+    if (unplugged) throw std::runtime_error(std::string("simulated keyboard unplugged: ") + std::strerror(ENODEV));
+}
+
+Report SimulatedTransport::getFeature() {
+    checkPlugged();
+    return reply_;
+}
 
 void SimulatedTransport::sendFeature(const Report& r) {
+    checkPlugged();
     const uint8_t cmd = r[0];
     reply_ = Report{};
     reply_[0] = cmd;
