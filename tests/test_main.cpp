@@ -12,9 +12,11 @@
 #include <vector>
 
 #include "keyboard.hpp"
+#include "layout.hpp"
 #include "macro.hpp"
 #include "protocol.hpp"
 #include "screen.hpp"
+#include "simulator.hpp"
 
 using namespace k86;
 
@@ -152,6 +154,99 @@ void testWaitForCommit() {
     kb2->setWaitForCommit(true);
     kb2->setDebounce(5);
     CHECK(t2.sent.size() == 1);
+}
+
+// Every key of the drawing maps to its own matrix slot on both firmwares.
+void testLayout() {
+    for (const auto& m : knownModels()) {
+        std::vector<int> seen;
+        for (const auto& k : k86Layout()) {
+            auto slot = layoutSlot(m, k);
+            CHECK(slot.has_value());
+            if (!slot) {
+                std::cerr << m.displayName << ": no slot for " << k.id << "\n";
+                continue;
+            }
+            CHECK(std::find(seen.begin(), seen.end(), *slot) == seen.end());
+            seen.push_back(*slot);
+        }
+        CHECK(seen.size() == 90);
+    }
+}
+
+// Named actions parse back to the same bytes, and the factory Fn layers have no unnamed entries.
+void testActionNames() {
+    for (const auto& c : actionCatalog()) {
+        std::string token = actionToString(c.action);
+        auto back = parseAction(token);
+        CHECK(back && *back == c.action);
+        CHECK(token.rfind("raw:", 0) != 0);
+        CHECK(actionLabel(c.action).rfind("Unknown", 0) != 0);
+    }
+    for (const auto& m : knownModels()) {
+        for (int i = 0; i < kSlots; ++i) {
+            const uint8_t* d = m.defaultFnMatrix + i * 4;
+            KeyAction a{d[0], d[1], d[2], d[3]};
+            if (actionLabel(a).rfind("Unknown", 0) == 0) {
+                ++failures;
+                std::cerr << m.displayName << ": unnamed Fn action in slot " << i << "\n";
+            }
+        }
+    }
+    CHECK(actionLabel({9, 1, 2, 0}) == "Macro 3 (toggle)");
+    CHECK(actionLabel({0, 0, 0xE3, 0x07}) == "Win + D");
+    CHECK(actionShortLabel({14, 0, 0, 0}) == "BT1");
+    CHECK(actionLabel({0, 0, 0x4B, 0}) == "Page Up");
+    CHECK(*parseAction("conn:2.4G") == (KeyAction{14, 0, 5, 0}));
+    CHECK(*parseAction("profile:2") == (KeyAction{8, 0, 4, 1}));
+}
+
+// Writes through the Keyboard API land in the simulated state and read back unchanged.
+void testSimulator() {
+    for (const auto& m : knownModels()) {
+        SimulatedTransport sim(m);
+        auto kb = makeKeyboard(sim, m, [](int) {});
+        CHECK(kb->readDeviceId() == m.firmwareId);
+        KeyMatrix base = kb->getKeyMatrix(1);
+        CHECK(std::equal(base.begin(), base.end(), m.defaultMatrix));
+        kb->setKey(1, 3, {0, 0, 0xE0, 0});
+        KeyMatrix after = kb->getKeyMatrix(1);
+        CHECK(after[12] == 0 && after[14] == 0xE0);
+        kb->setFnKey(2, 1, 5, {14, 0, 1, 0});
+        CHECK(kb->getFnMatrix(2, m.chip == Chip::YC3123 ? 1 : 0)[22] == 1);
+        KeyMatrix full = base;
+        full[0] = 9, full[1] = 2, full[2] = 7, full[3] = 0;
+        kb->setKeyMatrix(0, full);
+        CHECK(kb->getKeyMatrix(0) == full);
+        std::array<Rgb, kSlots> pic{};
+        pic[7] = 0x123456;
+        kb->setUserPicture(0, pic);
+        CHECK(kb->getUserPicture(0)[7] == 0x123456);
+        Macro mac = parseMacro("+LCtrl/5 C/20 -LCtrl", 3);
+        kb->setMacro(4, mac);
+        CHECK(macroToString(kb->getMacro(4)) == macroToString(mac));
+        kb->setMacro(4, Macro{0, {}});
+        CHECK(kb->getMacro(4).events.empty());
+        LightSetting l;
+        l.mode = 2, l.speed = 1, l.brightness = 3, l.color = 0x00FF00;
+        kb->setLight(l);
+        auto back = kb->getLight();
+        CHECK(back && back->mode == 2 && back->speed == 1 && back->brightness == 3 && back->color == 0x00FF00);
+        kb->setProfile(2);
+        CHECK(kb->getProfile() == 2);
+        CHECK(!sim.writes().empty());
+
+        ReadOnlyTransport ro(sim);
+        auto rk = makeKeyboard(ro, m, [](int) {});
+        CHECK(rk->getProfile() == 2);
+        bool refused = false;
+        try {
+            rk->setProfile(0);
+        } catch (const ReadOnlyError&) {
+            refused = true;
+        }
+        CHECK(refused);
+    }
 }
 
 void testScreen() {
@@ -296,6 +391,9 @@ int main(int argc, char** argv) {
     testMacroClear();
     testWaitForCommit();
     testScreen();
+    testLayout();
+    testActionNames();
+    testSimulator();
     std::string golden = argc > 1 ? argv[1] : K86_GOLDEN_DIR;
     testGolden(golden);
     if (failures) {

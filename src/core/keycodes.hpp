@@ -35,6 +35,25 @@ std::optional<KeyAction> parseAction(const std::string& s, std::string* err = nu
 // Help text listing the accepted action syntax.
 std::string actionSyntaxHelp();
 
+// Display names for people rather than for parsing: "Left Ctrl", "Page Up", "Num 5" (full) or
+// "Ctrl", "PgUp", "N5" (short, fits a key cap). Unknown usages give "Key 0xNN".
+std::string keyLabel(uint8_t usage, bool shortForm = false);
+// Display name of an action, e.g. "Win + D", "Volume +", "Bluetooth 1", "Macro 3 (toggle)",
+// "Unknown (0d 07 00 00)". Macro numbers are 1-based here (slot 0 is "Macro 1").
+std::string actionLabel(const KeyAction& a);
+// Shorter variant for drawing on a key cap ("BT1", "M3", "Vol+").
+std::string actionShortLabel(const KeyAction& a);
+
+// Actions offered by a key-assignment picker, grouped by category. Keyboard keys and macros are
+// not listed (they have their own pickers).
+struct ActionChoice {
+    std::string category;  // "Media", "Mouse", "System", "Lighting", "Side light", "Connection", "Profile"
+    std::string label;
+    KeyAction action;
+    std::string tooltip;
+};
+const std::vector<ActionChoice>& actionCatalog();
+
 // All named keyboard usages (for help output).
 std::vector<std::pair<uint8_t, std::string>> allHidUsageNames();
 

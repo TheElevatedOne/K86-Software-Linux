@@ -78,15 +78,38 @@ const NamedAction kMouse[] = {
     {{1, 0, 245, 255}, "mouse:WheelDown"},
 };
 
-// Vendor function actions whose meaning is stated by the original software.
+// Vendor function actions. The first group is named by the original software's function
+// table; the K86 firmware functions below it are only placed by the factory Fn layer and are
+// named after the K86 user manual's Fn key list (see docs/PROTOCOL.md).
 const NamedAction kFunctions[] = {
     {{10, 1, 0, 0}, "Fn"},
     {{10, 1, 1, 0}, "RFn"},
     {{8, 0, 1, 0}, "profile:Next"},
     {{8, 0, 2, 0}, "profile:Prev"},
     {{8, 0, 3, 0}, "profile:Loop"},
+    {{8, 0, 4, 0}, "profile:1"},
+    {{8, 0, 4, 1}, "profile:2"},
+    {{8, 0, 4, 2}, "profile:3"},
     {{13, 2, 1, 0}, "led:BrightnessUp"},
     {{13, 2, 2, 0}, "led:BrightnessDown"},
+    {{13, 3, 1, 0}, "led:SpeedDown"},
+    {{13, 3, 2, 0}, "led:SpeedUp"},
+    {{13, 1, 0, 0}, "led:NextEffect"},
+    {{13, 5, 1, 0}, "led:NextColor"},
+    {{10, 12, 0, 0}, "led:OnOff"},
+    {{10, 9, 0, 0}, "led:OnOff2"},
+    {{13, 8, 0, 0}, "side:NextEffect"},
+    {{13, 8, 3, 0}, "side:NextColor"},
+    {{13, 8, 1, 0}, "side:Brightness"},
+    {{13, 8, 2, 0}, "side:Speed"},
+    {{14, 0, 0, 0}, "conn:BT1"},
+    {{14, 0, 1, 0}, "conn:BT2"},
+    {{14, 0, 2, 0}, "conn:BT3"},
+    {{14, 0, 5, 0}, "conn:2.4G"},
+    {{10, 3, 0, 0}, "sys:WinLock"},
+    {{10, 8, 0, 0}, "sys:Battery"},
+    {{10, 2, 0, 0}, "sys:FactoryReset"},
+    {{19, 3, 0, 0}, "knob:Mode"},
     {{0, 0, 0, 0}, "Disabled"},
 };
 
@@ -295,7 +318,10 @@ std::string actionSyntaxHelp() {
          "  system:Power|Sleep|Wake      system control\n"
          "  mouse:Left|Right|Middle|Back|Forward|WheelUp|WheelDown\n"
          "  macro:N[:repeat|toggle|hold] play macro slot N\n"
-         "  Fn, profile:Next|Prev|Loop, led:BrightnessUp|BrightnessDown\n"
+         "  Fn, profile:Next|Prev|Loop|1|2|3\n"
+         "  led:BrightnessUp|BrightnessDown|SpeedUp|SpeedDown|NextEffect|NextColor|OnOff\n"
+         "  side:NextEffect|NextColor|Brightness|Speed        (side light)\n"
+         "  conn:BT1|BT2|BT3|2.4G, sys:WinLock|Battery|FactoryReset, knob:Mode\n"
          "  Disabled                     key does nothing\n"
          "  raw:aa,bb,cc,dd              four raw bytes (hex)\n"
          "Consumer names:";
@@ -308,6 +334,212 @@ std::string actionSyntaxHelp() {
     }
     o << '\n';
     return o.str();
+}
+
+}  // namespace k86
+
+// ------------------------------------------------------------------------------- display names
+namespace k86 {
+
+namespace {
+
+struct KeyName {
+    uint8_t usage;
+    const char* full;
+    const char* shortName;
+};
+
+// Names for people; usages not listed here use the parser name from kHidUsages.
+const KeyName kKeyLabels[] = {
+    {0x28, "Enter", "Enter"},        {0x29, "Esc", "Esc"},
+    {0x2A, "Backspace", "Bksp"},     {0x2B, "Tab", "Tab"},
+    {0x2C, "Space", "Space"},        {0x2D, "-", "-"},
+    {0x2E, "=", "="},                {0x2F, "[", "["},
+    {0x30, "]", "]"},                {0x31, "\\", "\\"},
+    {0x32, "ISO #", "#"},            {0x33, ";", ";"},
+    {0x34, "'", "'"},                {0x35, "`", "`"},
+    {0x36, ",", ","},                {0x37, ".", "."},
+    {0x38, "/", "/"},                {0x39, "Caps Lock", "Caps"},
+    {0x46, "Print Screen", "PrtSc"}, {0x47, "Scroll Lock", "ScrLk"},
+    {0x48, "Pause", "Pause"},        {0x49, "Insert", "Ins"},
+    {0x4A, "Home", "Home"},          {0x4B, "Page Up", "PgUp"},
+    {0x4C, "Delete", "Del"},         {0x4D, "End", "End"},
+    {0x4E, "Page Down", "PgDn"},     {0x4F, "Right", "→"},
+    {0x50, "Left", "←"},        {0x51, "Down", "↓"},
+    {0x52, "Up", "↑"},          {0x53, "Num Lock", "NumLk"},
+    {0x54, "Num /", "N/"},           {0x55, "Num *", "N*"},
+    {0x56, "Num -", "N-"},           {0x57, "Num +", "N+"},
+    {0x58, "Num Enter", "NEnt"},     {0x59, "Num 1", "N1"},
+    {0x5A, "Num 2", "N2"},           {0x5B, "Num 3", "N3"},
+    {0x5C, "Num 4", "N4"},           {0x5D, "Num 5", "N5"},
+    {0x5E, "Num 6", "N6"},           {0x5F, "Num 7", "N7"},
+    {0x60, "Num 8", "N8"},           {0x61, "Num 9", "N9"},
+    {0x62, "Num 0", "N0"},           {0x63, "Num .", "N."},
+    {0x64, "ISO \\", "ISO\\"},       {0x65, "Menu", "Menu"},
+    {0x66, "Power key", "Pwr"},      {0x67, "Num =", "N="},
+    {0x7F, "Mute key", "Mute"},      {0x80, "Volume up key", "Vol+"},
+    {0x81, "Volume down key", "Vol-"},
+    {0xE0, "Left Ctrl", "Ctrl"},     {0xE1, "Left Shift", "Shift"},
+    {0xE2, "Left Alt", "Alt"},       {0xE3, "Left Win", "Win"},
+    {0xE4, "Right Ctrl", "RCtrl"},   {0xE5, "Right Shift", "RShift"},
+    {0xE6, "Right Alt", "RAlt"},     {0xE7, "Right Win", "RWin"},
+};
+
+struct ConsumerName {
+    uint16_t code;
+    const char* full;
+    const char* shortName;
+};
+
+const ConsumerName kConsumerLabels[] = {
+    {0x00B5, "Next track", "Next"},          {0x00B6, "Previous track", "Prev"},
+    {0x00B7, "Stop", "Stop"},                {0x00CD, "Play / Pause", "Play"},
+    {0x00E2, "Mute", "Mute"},                {0x00E9, "Volume +", "Vol+"},
+    {0x00EA, "Volume -", "Vol-"},            {0x0183, "Media player", "Player"},
+    {0x018A, "Mail", "Mail"},                {0x0192, "Calculator", "Calc"},
+    {0x0194, "My computer", "PC"},           {0x0221, "Search", "Search"},
+    {0x0223, "Browser home", "WWW"},         {0x0224, "Browser back", "Back"},
+    {0x0227, "Refresh", "Refr"},             {0x006F, "Screen brightness +", "Scr+"},
+    {0x0070, "Screen brightness -", "Scr-"},
+};
+
+struct FunctionLabel {
+    KeyAction a;
+    const char* full;
+    const char* shortName;
+    const char* category;
+    const char* tooltip;
+};
+
+const FunctionLabel kFunctionLabels[] = {
+    {{10, 1, 0, 0}, "Fn", "Fn", "System", "The Fn key (switches to the Fn layer while held)"},
+    {{10, 1, 1, 0}, "Right Fn", "RFn", "System", "A second Fn key"},
+    {{10, 3, 0, 0}, "Win lock", "WinLk", "System", "Locks the Win key (factory Fn+Win)"},
+    {{10, 8, 0, 0}, "Battery level", "Batt", "System",
+     "Shows the battery level on the number row (factory Fn+Backspace)"},
+    {{10, 2, 0, 0}, "Factory reset", "Reset", "System", "Hold 3 s to restore factory settings (factory Fn+Esc)"},
+    {{19, 3, 0, 0}, "Knob: screen / volume", "Knob", "System",
+     "Switches the knob between screen menu and volume control (factory Fn+knob press)"},
+    {{2, 0, 0x81, 0}, "System power", "Power", "System", nullptr},
+    {{2, 0, 0x82, 0}, "System sleep", "Sleep", "System", nullptr},
+    {{2, 0, 0x83, 0}, "System wake", "Wake", "System", nullptr},
+    {{13, 1, 0, 0}, "Next backlight effect", "Effect", "Lighting", "Factory Fn+\\"},
+    {{13, 5, 1, 0}, "Next backlight colour", "Color", "Lighting", "Factory Fn+Enter"},
+    {{13, 2, 1, 0}, "Backlight brightness +", "Bri+", "Lighting", "Factory Fn+Up"},
+    {{13, 2, 2, 0}, "Backlight brightness -", "Bri-", "Lighting", "Factory Fn+Down"},
+    {{13, 3, 2, 0}, "Backlight speed +", "Spd+", "Lighting", "Factory Fn+Right"},
+    {{13, 3, 1, 0}, "Backlight speed -", "Spd-", "Lighting", "Factory Fn+Left"},
+    {{10, 12, 0, 0}, "Backlight on / off", "LED", "Lighting",
+     "Backlight on/off and power saving (factory Fn+] on the YC3121)"},
+    {{10, 9, 0, 0}, "Backlight on / off (YC3123)", "LED", "Lighting",
+     "Factory Fn+] on the YC3123 firmware"},
+    {{13, 8, 0, 0}, "Next side light effect", "Side", "Side light", "Factory Fn+C"},
+    {{13, 8, 3, 0}, "Next side light colour", "SCol", "Side light", "Factory Fn+V"},
+    {{13, 8, 1, 0}, "Side light brightness", "SBri", "Side light", "Cycles the brightness (factory Fn+Z)"},
+    {{13, 8, 2, 0}, "Side light speed", "SSpd", "Side light", "Cycles the speed (factory Fn+X)"},
+    {{14, 0, 0, 0}, "Bluetooth 1", "BT1", "Connection", "Tap to switch, hold to pair (factory Fn+1)"},
+    {{14, 0, 1, 0}, "Bluetooth 2", "BT2", "Connection", "Tap to switch, hold to pair (factory Fn+2)"},
+    {{14, 0, 2, 0}, "Bluetooth 3", "BT3", "Connection", "Tap to switch, hold to pair (factory Fn+3)"},
+    {{14, 0, 5, 0}, "2.4 GHz", "2.4G", "Connection", "Tap to switch, hold to pair (factory Fn+4)"},
+    {{8, 0, 1, 0}, "Next profile", "Prof+", "Profile", nullptr},
+    {{8, 0, 2, 0}, "Previous profile", "Prof-", "Profile", nullptr},
+    {{8, 0, 3, 0}, "Cycle profiles", "Prof", "Profile", nullptr},
+    {{8, 0, 4, 0}, "Profile 1", "P1", "Profile", nullptr},
+    {{8, 0, 4, 1}, "Profile 2", "P2", "Profile", nullptr},
+    {{8, 0, 4, 2}, "Profile 3", "P3", "Profile", nullptr},
+    {{1, 0, 240, 0}, "Left click", "LMB", "Mouse", nullptr},
+    {{1, 0, 241, 0}, "Right click", "RMB", "Mouse", nullptr},
+    {{1, 0, 242, 0}, "Middle click", "MMB", "Mouse", nullptr},
+    {{1, 0, 243, 0}, "Mouse back", "MB4", "Mouse", nullptr},
+    {{1, 0, 244, 0}, "Mouse forward", "MB5", "Mouse", nullptr},
+    {{1, 0, 245, 1}, "Wheel up", "Whl↑", "Mouse", nullptr},
+    {{1, 0, 245, 255}, "Wheel down", "Whl↓", "Mouse", nullptr},
+};
+
+std::string hexBytes(const KeyAction& a) {
+    char b[16];
+    snprintf(b, sizeof b, "%02x %02x %02x %02x", a[0], a[1], a[2], a[3]);
+    return b;
+}
+
+std::string modifierLabel(uint8_t u) {
+    switch (u) {
+        case 0xE0: return "Ctrl";
+        case 0xE1: return "Shift";
+        case 0xE2: return "Alt";
+        case 0xE3: return "Win";
+        case 0xE4: return "RCtrl";
+        case 0xE5: return "RShift";
+        case 0xE6: return "RAlt";
+        case 0xE7: return "RWin";
+        default: return {};
+    }
+}
+
+std::string labelImpl(const KeyAction& a, bool shortForm) {
+    if (a == KeyAction{0, 0, 0, 0}) return shortForm ? "—" : "Disabled";
+    for (const auto& f : kFunctionLabels)
+        if (f.a == a) return shortForm ? f.shortName : f.full;
+    switch (a[0]) {
+        case 0: {
+            std::vector<uint8_t> keys;
+            for (int i = 1; i < 4; ++i)
+                if (a[i]) keys.push_back(a[i]);
+            if (keys.size() == 1) return keyLabel(keys[0], shortForm);
+            std::string s;
+            for (size_t i = 0; i < keys.size(); ++i) {
+                std::string m = modifierLabel(keys[i]);
+                s += (i ? (shortForm ? "+" : " + ") : "") + (m.empty() ? keyLabel(keys[i], true) : m);
+            }
+            return s;
+        }
+        case 3: {
+            if (a[1] != 0) break;
+            uint16_t u = uint16_t(a[2] | (a[3] << 8));
+            for (const auto& c : kConsumerLabels)
+                if (c.code == u) return shortForm ? c.shortName : c.full;
+            char b[32];
+            snprintf(b, sizeof b, shortForm ? "C%03x" : "Media key 0x%04x", u);
+            return b;
+        }
+        case 9:
+            if (a[3] == 0 && a[1] <= 2) {
+                static const char* types[] = {"repeat", "toggle", "while held"};
+                std::string n = std::to_string(a[2] + 1);
+                return shortForm ? "M" + n : "Macro " + n + " (" + types[a[1]] + ")";
+            }
+            break;
+        default:
+            break;
+    }
+    return shortForm ? "?" : "Unknown (" + hexBytes(a) + ")";
+}
+
+}  // namespace
+
+std::string keyLabel(uint8_t usage, bool shortForm) {
+    for (const auto& k : kKeyLabels)
+        if (k.usage == usage) return shortForm ? k.shortName : k.full;
+    std::string n = hidUsageName(usage);
+    if (!n.empty()) return n;
+    char b[16];
+    snprintf(b, sizeof b, "Key 0x%02x", usage);
+    return b;
+}
+
+std::string actionLabel(const KeyAction& a) { return labelImpl(a, false); }
+std::string actionShortLabel(const KeyAction& a) { return labelImpl(a, true); }
+
+const std::vector<ActionChoice>& actionCatalog() {
+    static const std::vector<ActionChoice> list = [] {
+        std::vector<ActionChoice> v;
+        for (const auto& c : kConsumerLabels)
+            v.push_back({"Media", c.full, KeyAction{3, 0, uint8_t(c.code & 0xFF), uint8_t(c.code >> 8)}, {}});
+        for (const auto& f : kFunctionLabels)
+            v.push_back({f.category, f.full, f.a, f.tooltip ? f.tooltip : ""});
+        return v;
+    }();
+    return list;
 }
 
 }  // namespace k86

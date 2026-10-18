@@ -225,9 +225,13 @@ void printMatrix(const KeyMatrix& names, const KeyMatrix& defaults, const KeyMat
         KeyAction a{m[i * 4], m[i * 4 + 1], m[i * 4 + 2], m[i * 4 + 3]};
         if (name.empty() && a == KeyAction{0, 0, 0, 0}) continue;
         KeyAction d{defaults[i * 4], defaults[i * 4 + 1], defaults[i * 4 + 2], defaults[i * 4 + 3]};
-        char line[96];
-        snprintf(line, sizeof line, "@%-4d %-14s ", i, name.empty() ? "-" : name.c_str());
-        std::cout << line << actionToString(a) << (a == d ? "" : "   (changed)") << "\n";
+        char line[160];
+        std::string token = actionToString(a), label = actionLabel(a);
+        snprintf(line, sizeof line, "@%-4d %-14s %-22s %s", i, name.empty() ? "-" : name.c_str(), token.c_str(),
+                 label == token ? "" : label.c_str());
+        std::string out = line;
+        while (!out.empty() && out.back() == ' ') out.pop_back();
+        std::cout << out << (a == d ? "" : "   (changed)") << "\n";
     }
 }
 

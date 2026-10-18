@@ -132,13 +132,39 @@ that answers the same packets (mode, speed and colour checked on hardware). Mode
 | `01 00 b x` | mouse: 240 left, 241 right, 242 middle, 243 back, 244 forward, `F5 01`/`F5 FF` wheel |
 | `02 00 u 00` | system control (81 power, 82 sleep, 83 wake) |
 | `03 00 lo hi` | consumer usage (E2 mute, E9 vol+, EA vol−, CD play/pause …) |
-| `08 00 op n` | profile switching |
+| `08 00 op n` | profile switching: op 1 next, 2 previous, 3 cycle, 4 select profile n |
 | `09 type idx 00` | macro idx; type 0 = repeat N, 1 = toggle, 2 = while held |
 | `0A 01 00 00` | Fn |
 | `00 00 00 00` | disabled |
 
-Other values (`0A xx`, `0D xx`, `0E xx`, `13 xx` …) are firmware functions that the driver only
-uses in the default Fn layers; their meaning is not named in the driver.
+### K86 firmware functions
+
+The default Fn layers also use firmware functions that the original software does not name (its
+UI shows them as "System Key"). Their meaning comes from matching each slot of the factory Fn layer
+with the Fn key list of the K86 user manual
+(`https://download.attackshark.pro/ATTACKSHARK/K86/K86UserManual.pdf`):
+
+| Bytes | Factory key | Function (manual) | `k86ctl` name |
+|---|---|---|---|
+| `0A 02 00 00` | Fn+Esc | hold 3 s: factory reset | `sys:FactoryReset` |
+| `0A 03 00 00` | Fn+Win | lock the Win key | `sys:WinLock` |
+| `0A 08 00 00` | Fn+Backspace | show the battery level on the number row | `sys:Battery` |
+| `0A 0C 00 00` | Fn+] (YC3121) | backlight on/off, power saving | `led:OnOff` |
+| `0A 09 00 00` | Fn+] (YC3123) | same key in the YC3123 table (assumed the same function) | `led:OnOff2` |
+| `0E 00 00/01/02 00` | Fn+1/2/3 | Bluetooth 1/2/3 (hold to pair) | `conn:BT1` … `conn:BT3` |
+| `0E 00 05 00` | Fn+4 | 2.4 GHz (hold to pair) | `conn:2.4G` |
+| `0D 01 00 00` | Fn+\ | next backlight effect | `led:NextEffect` |
+| `0D 05 01 00` | Fn+Enter | next backlight colour | `led:NextColor` |
+| `0D 02 01/02 00` | Fn+Up/Down | backlight brightness +/− (named `LEDBIRINC/DEC` by the driver) | `led:BrightnessUp/Down` |
+| `0D 03 01/02 00` | Fn+Left/Right | backlight speed −/+ | `led:SpeedDown/Up` |
+| `0D 08 00 00` | Fn+C | next side light effect | `side:NextEffect` |
+| `0D 08 03 00` | Fn+V | next side light colour | `side:NextColor` |
+| `0D 08 01 00` | Fn+Z | side light brightness cycle | `side:Brightness` |
+| `0D 08 02 00` | Fn+X | side light speed cycle | `side:Speed` |
+| `13 03 00 00` | Fn+knob press | switch the knob between screen menu and volume | `knob:Mode` |
+
+The YC3123 base layer also has `13 01 00 00` and `13 01 01 00` in slots without a printed key
+(probably knob functions); they stay unnamed (`raw:`).
 
 ### Factory Fn layer
 
