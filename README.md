@@ -141,7 +141,7 @@ The self-test needs a display; `ctest` skips it without one (CI runs it under `x
 ## Releases
 
 Prebuilt binaries (`.tar.gz`) and `.deb`, `.rpm` and pacman packages for x86_64 and aarch64
-are on the [releases page](https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/releases),
+are on the [releases page](https://github.com/TheElevatedOne/K86-Software-Linux/releases),
 each with a `.sha256` file and a combined `SHA256SUMS` (`sha256sum -c SHA256SUMS`). The
 packages install the udev rule, so no extra permission setup is needed.
 

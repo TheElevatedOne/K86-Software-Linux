@@ -75,7 +75,7 @@ First release.
   are no longer lost when written while an animation plays.
 - Side light support on the YC3121, which the original driver does not offer.
 
-[Unreleased]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/0.2.0...HEAD
-[0.2.0]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/0.1.1...0.2.0
-[0.1.1]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/compare/0.1.0...0.1.1
-[0.1.0]: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware/releases/tag/0.1.0
+[Unreleased]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.1.1...0.2.0
+[0.1.1]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.1.0...0.1.1
+[0.1.0]: https://github.com/TheElevatedOne/K86-Software-Linux/releases/tag/0.1.0

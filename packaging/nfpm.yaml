@@ -13,7 +13,7 @@ description: |
   Configuration software for the Attack Shark K86 keyboard.
   Lighting, per-key colours, key remapping, macros and the LCD screen,
   with the k86ctl command line tool and the k86-gui GTK 3 GUI.
-homepage: https://github.com/TheElevatedOne/AttackSharkKeyboardSoftware
+homepage: https://github.com/TheElevatedOne/K86-Software-Linux
 license: GPL-3.0-only
 
 contents:
