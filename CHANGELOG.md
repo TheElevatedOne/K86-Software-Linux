@@ -9,6 +9,24 @@ The release workflow publishes the section whose version matches the tag (`0.1.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-22
+
+### Added
+
+- System tray icon for k86-gui (libayatana-appindicator) with a menu to show or hide the
+  window and quit. Settings → Application: show the tray icon, keep running in the tray when
+  the window is closed, start minimized to the tray (saved in `~/.config/k86-gui/settings.ini`).
+- `k86-gui --minimize` starts hidden in the tray; closing the window then keeps it there. The
+  window opens anyway when no tray is available.
+- libk86: a shared library with a C API (`<k86/k86.h>`, pkg-config `k86`) so other programs can
+  change the keyboard like `k86ctl` does: lighting, side light, key maps and Fn layers, macros,
+  per-key colours, LCD images, clock and stats, profile, debounce, sleep, options, factory
+  reset, and a simulated keyboard for testing. Included in the release archives and packages.
+
+### Changed
+
+- The packages depend on libayatana-appindicator.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added
@@ -75,7 +93,8 @@ First release.
   are no longer lost when written while an animation plays.
 - Side light support on the YC3121, which the original driver does not offer.
 
-[Unreleased]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.2.1...HEAD
+[0.2.1]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/TheElevatedOne/K86-Software-Linux/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/TheElevatedOne/K86-Software-Linux/releases/tag/0.1.0

@@ -39,14 +39,17 @@ connect the keyboard with the USB cable.
 ## Build
 
 ```sh
-sudo apt install build-essential cmake pkg-config libgtk-3-dev   # GTK only needed for the GUI
-# Fedora: sudo dnf install gcc-c++ cmake pkgconf gtk3-devel
-# Arch:   sudo pacman -S base-devel cmake gtk3
+sudo apt install build-essential cmake pkg-config libgtk-3-dev libayatana-appindicator3-dev
+# Fedora: sudo dnf install gcc-c++ cmake pkgconf gtk3-devel libayatana-appindicator-gtk3-devel
+# Arch:   sudo pacman -S base-devel cmake gtk3 libayatana-appindicator
 cmake -S . -B build
 cmake --build build -j
-ctest --test-dir build        # protocol tests and the GUI self-test
-sudo cmake --install build    # installs k86ctl, k86-gui and the udev rule
+ctest --test-dir build        # protocol tests, C API test and the GUI self-test
+sudo cmake --install build    # installs k86ctl, k86-gui, libk86 and the udev rule
 ```
+
+GTK 3 is only needed for the GUI and libayatana-appindicator only for its tray icon; without
+them the GUI or the tray icon is left out. `-DK86_BUILD_LIBRARY=OFF` skips libk86.
 
 Use `-DK86_BUILD_GUI=OFF` to build without GTK.
 
@@ -75,13 +78,22 @@ plugged in later), reads every setting from it, and shows:
 * **Macros** – the 50 macro slots, with an event editor, recording from the keyboard and
   adjustable delays.
 * **Screen** – images and GIFs for the LCD, clock sync.
-* **Settings** – debounce, sleep timers, option switches, firmware versions, factory reset.
+* **Settings** – debounce, sleep timers, option switches, firmware versions, factory reset,
+  and the window's own options: tray icon, keep running in the tray when the window is closed,
+  start minimized to the tray (saved in `~/.config/k86-gui/settings.ini`).
+
+The tray icon (libayatana-appindicator) needs a tray that supports AppIndicator /
+StatusNotifierItem: KDE, waybar, GNOME with the AppIndicator extension, and so on. Its menu
+shows or hides the window and quits; middle click toggles the window. While k86-gui runs in
+the tray, it keeps the keyboard connected (for example to keep streaming system stats to the
+screen) and picks it up again when it is plugged in. Without a tray the window stays open.
 
 The profile buttons at the top choose which profile you see and edit (★ marks the one the keyboard
 uses; *Use on keyboard* switches it).
 
 ```sh
 k86-gui                      # normal use
+k86-gui --minimize           # start hidden in the tray (closing the window keeps it there)
 k86-gui --read-only          # read and look around, never write to the keyboard
 k86-gui --dry-run=v1         # a simulated YC3121 (v2 = YC3123); writes are printed
 k86-gui --self-test          # click through every page against the simulator and check the writes
@@ -111,6 +123,45 @@ k86ctl --dry-run=v1 light set breath                 # print the reports, no har
 ```
 
 Run `k86ctl --help` and `k86ctl actions` for the full syntax.
+
+## Library (libk86)
+
+`libk86.so` with the header `<k86/k86.h>` lets other programs do what `k86ctl` does. It is a C
+API (usable from C++, and from Python, Rust, ... through their C FFI) and takes the same key
+names, actions and macro syntax as `k86ctl`. Errors are returned as `-1` with a message from
+`k86_last_error()`; `k86_open_simulated()` gives an in-memory keyboard to test against.
+
+```c
+#include <k86/k86.h>
+#include <stdio.h>
+
+int main(void) {
+    k86_keyboard* kb = k86_open(NULL, 0);  /* first K86 found */
+    if (!kb) {
+        fprintf(stderr, "%s\n", k86_last_error());
+        return 1;
+    }
+    k86_set_key(kb, 0, "CapsLock", "LCtrl");             /* k86ctl keymap set CapsLock LCtrl */
+    k86_set_fn_key(kb, 0, K86_OS_WINDOWS, "F12", "consumer:Calculator");
+    k86_set_macro(kb, 0, "+LCtrl/5 C/20 -LCtrl", 1);     /* k86ctl macro set 0 "..." */
+
+    k86_light l = {0};
+    l.mode = (uint8_t)k86_light_mode(kb, "static", 0);
+    l.brightness = 4;
+    l.color = 0x00FF00;
+    if (k86_set_light(kb, &l) != 0) fprintf(stderr, "%s\n", k86_last_error());
+    k86_close(kb);
+    return 0;
+}
+```
+
+```sh
+cc app.c -o app $(pkg-config --cflags --libs k86)
+```
+
+See [`include/k86/k86.h`](include/k86/k86.h) for every function (lighting, side light, key maps
+and Fn layers, macros, per-key colours, LCD images, clock and stats, profile, debounce, sleep,
+options, factory reset). Only the `k86_*` functions are exported; the soname is `libk86.so.0`.
 
 ## Testing and verification
 
@@ -146,8 +197,8 @@ each with a `.sha256` file and a combined `SHA256SUMS` (`sha256sum -c SHA256SUMS
 packages install the udev rule, so no extra permission setup is needed.
 
 To make a release: set the version in `CMakeLists.txt`, add its section to
-[CHANGELOG.md](CHANGELOG.md), commit, then tag and push (`git tag 0.2.0 && git push origin
-0.2.0`) and run the **Release** workflow from the Actions tab. It builds the newest tag (or
+[CHANGELOG.md](CHANGELOG.md), commit, then tag and push (`git tag 0.2.1 && git push origin
+0.2.1`) and run the **Release** workflow from the Actions tab. It builds the newest tag (or
 the one you enter), checks that it matches the CMake version, and creates or updates the
 GitHub release with the changelog section as its notes.
 

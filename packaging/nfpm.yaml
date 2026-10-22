@@ -12,7 +12,8 @@ maintainer: TheElevatedOne <adam.mlady@elevated.ovh>
 description: |
   Configuration software for the Attack Shark K86 keyboard.
   Lighting, per-key colours, key remapping, macros and the LCD screen,
-  with the k86ctl command line tool and the k86-gui GTK 3 GUI.
+  with the k86ctl command line tool, the k86-gui GTK 3 GUI (with a tray
+  icon) and libk86, a C library for other programs.
 homepage: https://github.com/TheElevatedOne/K86-Software-Linux
 license: GPL-3.0-only
 
@@ -23,6 +24,39 @@ contents:
   - src: stage/usr/bin/k86-gui
     dst: /usr/bin/k86-gui
     file_info: {mode: 0755}
+  # libk86 (C API): /usr/lib on Debian / Ubuntu and Arch, /usr/lib64 on Fedora / openSUSE.
+  - src: stage/usr/lib/libk86.so.0
+    dst: /usr/lib/libk86.so.0
+    packager: deb
+  - src: stage/usr/lib/libk86.so.0
+    dst: /usr/lib/libk86.so.0
+    packager: archlinux
+  - src: stage/usr/lib/libk86.so.0
+    dst: /usr/lib64/libk86.so.0
+    packager: rpm
+  - src: libk86.so.0
+    dst: /usr/lib/libk86.so
+    type: symlink
+    packager: deb
+  - src: libk86.so.0
+    dst: /usr/lib/libk86.so
+    type: symlink
+    packager: archlinux
+  - src: libk86.so.0
+    dst: /usr/lib64/libk86.so
+    type: symlink
+    packager: rpm
+  - src: stage/usr/lib/pkgconfig/k86.pc
+    dst: /usr/lib/pkgconfig/k86.pc
+    packager: deb
+  - src: stage/usr/lib/pkgconfig/k86.pc
+    dst: /usr/lib/pkgconfig/k86.pc
+    packager: archlinux
+  - src: stage/usr/lib/pkgconfig/k86.pc
+    dst: /usr/lib64/pkgconfig/k86.pc
+    packager: rpm
+  - src: stage/usr/include/k86/k86.h
+    dst: /usr/include/k86/k86.h
   - src: stage/usr/lib/udev/rules.d/70-attackshark-k86.rules
     dst: /usr/lib/udev/rules.d/70-attackshark-k86.rules
   - src: stage/usr/share/applications/k86-gui.desktop
@@ -48,10 +82,13 @@ overrides:
       - libc6
       - libstdc++6
       - libgtk-3-0 | libgtk-3-0t64
+      - libayatana-appindicator3-1
   rpm:
     depends:
       - gtk3
+      - libayatana-appindicator3.so.1()(64bit)
   archlinux:
     depends:
       - gcc-libs
       - gtk3
+      - libayatana-appindicator

@@ -495,6 +495,28 @@ int runSelfTest(App* app, SimulatedTransport* sim) {
     check(deepBt && gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(deepBt)) == slp->deepBluetooth,
           "Revert restores the form");
 
+    // Application settings: saved to the settings file right away; the tray options depend on the
+    // tray icon option.
+    GtkWidget* trayBox = findButton(set, "Show an icon in the system tray");
+    GtkWidget* keepBox = findButton(set, "Keep running in the tray when the window is closed");
+    GtkWidget* minBox = findButton(set, "Start minimized to the tray");
+    check(trayBox && keepBox && minBox && !gtk_widget_get_sensitive(keepBox) && !gtk_widget_get_sensitive(minBox),
+          "tray options shown, sub-options disabled while the tray is off");
+    if (trayBox && keepBox && minBox) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(trayBox), TRUE);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(keepBox), TRUE);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(minBox), TRUE);
+        AppSettings saved = loadAppSettings(app->settingsPath);
+        check(saved.tray && saved.keepInTray && saved.startMinimized && gtk_widget_get_sensitive(keepBox),
+              "tray settings saved to " + app->settingsPath);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(minBox), FALSE);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(trayBox), FALSE);
+        saved = loadAppSettings(app->settingsPath);
+        check(!saved.tray && saved.keepInTray && !saved.startMinimized && !gtk_widget_get_sensitive(keepBox),
+              "tray turned off, keep-running choice remembered");
+        check(!app->tray, "no tray icon in the self-test");
+    }
+
     // Read-only mode refuses writes in the window itself.
     app->opt.readOnly = true;
     errs = app->errorCount;

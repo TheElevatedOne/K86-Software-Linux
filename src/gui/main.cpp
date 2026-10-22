@@ -2,6 +2,8 @@
 //
 // The window works like the original software: a drawing of the keyboard on the key pages,
 // click a key to change it, and everything is read from the keyboard when it is connected.
+#include <glib/gstdio.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <iostream>
@@ -269,6 +271,7 @@ void connectTo(App* app, const std::string& path) {
             c.macros.assign(kMaxMacros, std::nullopt);
             app->cache = std::move(c);
             gtk_label_set_text(GTK_LABEL(app->deviceCombo), text.c_str());
+            if (app->tray) app->tray->setStatus(model->displayName + " connected");
             showConnected(app, true);
             updateProfileButtons(app);
             app->refreshPages();
@@ -281,7 +284,52 @@ void lost(App* app) {
     showConnected(app, false, "The keyboard was disconnected.\nConnect it with the USB cable; it is picked up "
                               "automatically.");
     gtk_label_set_text(GTK_LABEL(app->deviceCombo), "No keyboard");
+    if (app->tray) app->tray->setStatus("No keyboard connected");
     setProgress(app, 1.0, "Keyboard disconnected.");
+}
+
+// ------------------------------------------------------------------------------------ tray
+bool windowVisible(App* app) { return gtk_widget_get_visible(app->window); }
+
+void setWindowVisible(App* app, bool visible) {
+    if (visible) {
+        gtk_widget_show(app->window);
+        gtk_window_present(GTK_WINDOW(app->window));
+    } else {
+        gtk_widget_hide(app->window);
+    }
+    if (app->tray) app->tray->menuChanged();
+}
+
+bool trayWanted(App* app) {
+    return app->opt.screenshot.empty() && (app->settings.tray || app->opt.minimize);
+}
+
+// Closing the window only hides it while a tray host shows our icon (otherwise the app would
+// keep running with no way back to it).
+bool hideOnClose(App* app) {
+    return app->tray && app->tray->registered() && (app->settings.keepInTray || app->opt.minimize);
+}
+
+void applyTray(App* app) {
+    if (trayWanted(app) && !app->tray) {
+        app->tray = std::make_unique<Tray>();
+        Tray* t = app->tray.get();
+        t->windowVisible = [app] { return windowVisible(app); };
+        t->onActivate = [app] { setWindowVisible(app, !windowVisible(app)); };
+        t->onQuit = [] { gtk_main_quit(); };
+        t->onRegisteredChanged = [app](bool registered) {
+            // The tray host went away while the window was hidden: bring the window back.
+            if (!registered && !windowVisible(app)) setWindowVisible(app, true);
+            if (app->trayChanged) app->trayChanged();
+        };
+        t->setStatus(app->cache.model ? app->cache.model->displayName + " connected" : "No keyboard connected");
+        if (!t->start()) app->tray.reset();
+    } else if (!trayWanted(app) && app->tray) {
+        app->tray.reset();
+        if (!windowVisible(app)) setWindowVisible(app, true);
+    }
+    if (app->trayChanged) app->trayChanged();
 }
 
 // Looks for a keyboard while none is connected.
@@ -449,9 +497,12 @@ int main(int argc, char** argv) {
         else if (a == "--screenshot" && i + 1 < argc) opt.screenshot = argv[++i];
         else if (a == "--page" && i + 1 < argc) opt.page = argv[++i];
         else if (a == "--self-test") opt.selfTest = true;
+        else if (a == "--minimize") opt.minimize = true;
         else {
             std::printf(
-                "Usage: k86-gui [--dry-run[=v1|v2]] [--read-only] [--page NAME] [--screenshot PREFIX]\n"
+                "Usage: k86-gui [--minimize] [--dry-run[=v1|v2]] [--read-only] [--page NAME] [--screenshot PREFIX]\n"
+                "  --minimize     start hidden with an icon in the system tray (closing the window\n"
+                "                 keeps it running there)\n"
                 "  --dry-run      use a simulated K86 (v1 = YC3121, v2 = YC3123); writes are printed\n"
                 "  --read-only    never write to the keyboard (everything is still read)\n"
                 "  --page NAME    start on a page: keys, fn, lighting, perkey, macros, screen, settings\n"
@@ -464,6 +515,7 @@ int main(int argc, char** argv) {
         if (opt.dryRun.empty()) opt.dryRun = "v1";
         opt.readOnly = false;
         if (opt.screenshot.empty()) opt.screenshot = "-";  // off screen, no window
+        opt.minimize = false;
     }
     if (!opt.dryRun.empty() && opt.dryRun != "v1" && opt.dryRun != "v2") {
         std::fprintf(stderr, "--dry-run takes v1 or v2\n");
@@ -473,11 +525,28 @@ int main(int argc, char** argv) {
     addCss();
     gtk_window_set_default_icon_name("k86-gui");
     App* a = app.get();
+    if (opt.selfTest) {
+        // Never touch the user's settings from the self-test.
+        gchar* dir = g_dir_make_tmp("k86-gui-selftest-XXXXXX", nullptr);
+        a->settingsPath = std::string(dir ? dir : g_get_tmp_dir()) + "/settings.ini";
+        g_free(dir);
+    } else {
+        a->settingsPath = defaultAppSettingsPath();
+    }
+    a->settings = loadAppSettings(a->settingsPath);
+    a->applyTray = [a] { applyTray(a); };
     // Screenshots are rendered off screen, so no window appears at all.
     a->window = opt.screenshot.empty() ? gtk_window_new(GTK_WINDOW_TOPLEVEL) : gtk_offscreen_window_new();
     gtk_window_set_title(GTK_WINDOW(a->window), "Attack Shark K86");
     gtk_window_set_default_size(GTK_WINDOW(a->window), 1240, 900);
     g_signal_connect(a->window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
+    g_signal_connect(a->window, "delete-event", G_CALLBACK(+[](GtkWidget*, GdkEvent*, gpointer d) -> gboolean {
+                         auto* a = static_cast<App*>(d);
+                         if (!hideOnClose(a)) return FALSE;  // close = quit
+                         setWindowVisible(a, false);
+                         return TRUE;
+                     }),
+                     a);
 
     GtkWidget* root = vbox(0);
     if (!opt.screenshot.empty()) gtk_widget_set_size_request(root, 1240, 900);
@@ -515,7 +584,23 @@ int main(int argc, char** argv) {
         preload(a);
     };
 
-    gtk_widget_show_all(a->window);
+    const bool startHidden =
+        opt.screenshot.empty() && (opt.minimize || (a->settings.tray && a->settings.startMinimized));
+    applyTray(a);
+    if (startHidden && a->tray) {
+        gtk_widget_show_all(root);
+        // Show the window after all if no tray host takes the icon.
+        g_timeout_add_seconds(3, +[](gpointer d) -> gboolean {
+            auto* a = static_cast<App*>(d);
+            if (!(a->tray && a->tray->registered()) && !windowVisible(a)) {
+                std::cerr << "k86-gui: no system tray found; showing the window\n";
+                setWindowVisible(a, true);
+            }
+            return G_SOURCE_REMOVE;
+        }, a);
+    } else {
+        gtk_widget_show_all(a->window);
+    }
     showConnected(a, false);
     if (!opt.page.empty()) gtk_stack_set_visible_child_name(GTK_STACK(a->stack), opt.page.c_str());
     if (opt.selfTest) {
@@ -543,5 +628,12 @@ int main(int argc, char** argv) {
     a->hotplugTimer = g_timeout_add_seconds(2, hotplug, a);
     gtk_main();
     g_source_remove(a->hotplugTimer);
+    a->tray.reset();
+    if (opt.selfTest) {  // remove the temporary settings file and its directory
+        gchar* dir = g_path_get_dirname(a->settingsPath.c_str());
+        g_unlink(a->settingsPath.c_str());
+        g_rmdir(dir);
+        g_free(dir);
+    }
     return exitCode;
 }

@@ -1,0 +1,7 @@
+/* Only the C API is exported from libk86. */
+K86_0 {
+  global:
+    k86_*;
+  local:
+    *;
+};

@@ -7,6 +7,7 @@
 #include <array>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "keyboard.hpp"
 #include "keyboard_view.hpp"
 #include "sysinfo.hpp"
+#include "tray.hpp"
 #include "worker.hpp"
 
 namespace k86gui {
@@ -41,7 +43,18 @@ struct Options {
     std::string screenshot;  // render every page to PREFIX-name.png and exit
     std::string page;        // page to show first
     bool selfTest = false;   // drive the widgets against the simulator and check the result
+    bool minimize = false;   // start hidden with a tray icon (and keep running in the tray)
 };
+
+// Settings of the window itself (not of the keyboard), kept in ~/.config/k86-gui/settings.ini.
+struct AppSettings {
+    bool tray = false;            // show an icon in the system tray
+    bool keepInTray = false;      // closing the window hides it to the tray
+    bool startMinimized = false;  // start hidden in the tray
+};
+AppSettings loadAppSettings(const std::string& path);
+bool saveAppSettings(const std::string& path, const AppSettings& s);
+std::string defaultAppSettingsPath();
 
 struct Page {
     std::string name, title;
@@ -70,6 +83,11 @@ struct App {
     guint hotplugTimer = 0;
     bool connecting = false;
     int updating = 0;  // > 0 while widgets are filled from the cache (suppresses writes)
+    AppSettings settings;
+    std::string settingsPath;
+    std::unique_ptr<Tray> tray;          // while the tray icon is enabled
+    std::function<void()> applyTray;     // create / remove the tray icon after a settings change
+    std::function<void()> trayChanged;   // the tray icon appeared, vanished or was accepted
     std::optional<bool> autoConfirm;  // self-test: answer confirmations without a dialog
     int errorCount = 0;               // errors shown so far (checked by the self-test)
 

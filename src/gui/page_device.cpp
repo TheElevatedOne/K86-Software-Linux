@@ -352,6 +352,55 @@ void writeSettings(SettingsPage* p) {
         });
 }
 
+// "Application" settings: tray icon, keep running in the tray, start minimized. Saved and applied
+// right away (they are settings of this program, not of the keyboard).
+GtkWidget* buildAppSection(App* app) {
+    GtkWidget* box = vbox(4);
+    GtkWidget* tray = gtk_check_button_new_with_label("Show an icon in the system tray");
+    GtkWidget* keep = gtk_check_button_new_with_label("Keep running in the tray when the window is closed");
+    GtkWidget* hidden = gtk_check_button_new_with_label("Start minimized to the tray");
+    GtkWidget* note = label("", true);
+    for (GtkWidget* w : {tray, keep, hidden, note}) gtk_box_pack_start(GTK_BOX(box), w, FALSE, FALSE, 0);
+    gtk_widget_set_margin_start(keep, 24);
+    gtk_widget_set_margin_start(hidden, 24);
+
+    auto sync = [app, tray, keep, hidden, note] {
+        Updating u(app);
+        const AppSettings& s = app->settings;
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray), s.tray);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(keep), s.keepInTray);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hidden), s.startMinimized);
+        gtk_widget_set_sensitive(keep, s.tray);
+        gtk_widget_set_sensitive(hidden, s.tray);
+        std::string n;
+        gtk_widget_set_sensitive(tray, Tray::available());
+        if (!Tray::available())
+            n = "This build of k86-gui has no tray support (it was built without libayatana-appindicator).";
+        else if (app->tray && !app->tray->registered())
+            n = "No system tray was found on this desktop (it needs an AppIndicator / StatusNotifierItem tray, "
+                "e.g. KDE, waybar or GNOME with the AppIndicator extension); the window stays open.";
+        else if (app->opt.minimize && !s.tray)
+            n = "The tray icon is shown because k86-gui was started with --minimize.";
+        gtk_label_set_text(GTK_LABEL(note), n.c_str());
+        gtk_widget_set_visible(note, !n.empty());
+    };
+    auto changed = [app, tray, keep, hidden, sync] {
+        if (app->updating) return;
+        AppSettings& s = app->settings;
+        s.tray = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray));
+        s.keepInTray = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(keep));
+        s.startMinimized = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(hidden));
+        if (!saveAppSettings(app->settingsPath, s)) app->error("Could not save " + app->settingsPath + ".");
+        if (app->applyTray) app->applyTray();
+        sync();
+    };
+    for (GtkWidget* w : {tray, keep, hidden}) onChanged(w, "toggled", changed);
+    app->trayChanged = sync;
+    gtk_widget_set_no_show_all(note, TRUE);
+    sync();
+    return section("Application", box);
+}
+
 }  // namespace
 
 Page buildSettingsPage(App* app) {
@@ -359,6 +408,8 @@ Page buildSettingsPage(App* app) {
     p->app = app;
     GtkWidget* b = vbox(10, 14);
     g_object_set_data_full(G_OBJECT(b), "page", p, [](gpointer d) { delete static_cast<SettingsPage*>(d); });
+
+    gtk_box_pack_start(GTK_BOX(b), buildAppSection(app), FALSE, FALSE, 0);
 
     GtkWidget* grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 6);

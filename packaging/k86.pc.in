@@ -1,0 +1,11 @@
+# Relocatable: paths are relative to this file, so it works under /usr/lib, /usr/lib64, ...
+prefix=${pcfiledir}/@K86_PC_RELPREFIX@
+libdir=${pcfiledir}/..
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: k86
+Description: Attack Shark K86 keyboard configuration library
+URL: https://github.com/TheElevatedOne/K86-Software-Linux
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lk86
+Cflags: -I${includedir}
